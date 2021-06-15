@@ -36,6 +36,7 @@ class SineBM(Equation):
     def __init__(self, eqn_config):
         super(SineBM, self).__init__(eqn_config)
         self.x_init = np.zeros(self.dim)
+        self.mean_y = np.sin(self.t_grid)*np.exp(-self.t_grid/2)
         self.drift_model = self.create_model()
         self.learn_forward()
 
@@ -98,7 +99,9 @@ class SineBM(Equation):
             )
             Y_predict = self.drift_model.predict(X)
             Y_true = term_true.reshape([-1, 1])
-            print("R^2 :{}".format(np.sum((Y_predict - Y_true)**2)/np.sum((Y_true-np.mean(Y_true))**2)))
+            r2 = np.sum((Y_predict - Y_true)**2)/np.sum((Y_true-np.mean(Y_true))**2)
+            print("R^2: {}".format(r2))
+        assert r2 < 0.01, "Failed learning of the forward model"
 
     def sample(self, num_sample):
         # start = timeit.default_timer()
