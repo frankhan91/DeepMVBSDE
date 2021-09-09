@@ -23,32 +23,36 @@ class BSDESolver(object):
         start_time = time.time()
         training_history = []
         valid_data = self.bsde.sample(self.net_config.valid_size)
+        mean_y_train = self.bsde.mean_y * 0
 
         # begin sgd iteration
         for step in range(self.net_config.num_iterations+1):
+            if step % 20 == 0:
+                train_data = self.bsde.sample(self.net_config.batch_size)
+                train_data = (train_data[0], train_data[1], mean_y_train)
+            mean_y_train = self.train_step(train_data)
             if step % self.net_config.logging_frequency == 0:
-                loss, mean_y = self.loss_fn(valid_data, training=False)
+                loss, mean_y_valid = self.loss_fn(
+                    (valid_data[0], valid_data[1], mean_y_train), training=False)
                 loss = loss.numpy()
                 y_init = self.y_init.numpy()[0]
                 elapsed_time = time.time() - start_time
                 training_history.append([step, loss, y_init, elapsed_time])
                 if self.net_config.verbose:
-                    mean_y = np.array([y.numpy() for y in mean_y])
-                    err_mean_y = np.mean((mean_y - self.bsde.mean_y)**2)
+                    mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
+                    err_mean_y = np.mean((mean_y_valid - self.bsde.mean_y)**2)
                     logging.info("step: %5u,    loss: %.4e, Y0: %.4e,   err_y: %.4e,    elapsed time: %3u" % (
                         step, loss, y_init, err_mean_y, elapsed_time))
-            if step % 20 == 0:
-                train_data = self.bsde.sample(self.net_config.batch_size)
-            self.train_step(train_data)
         valid_data = self.bsde.sample(self.net_config.valid_size*20)
-        _, mean_y = self.loss_fn(valid_data, training=False)
-        mean_y = np.array([y.numpy() for y in mean_y])
+        _, mean_y_valid = self.loss_fn((valid_data[0], valid_data[1], mean_y_train), training=False)
+        mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
         print(self.bsde.mean_y)
-        print(mean_y - self.bsde.mean_y)
+        print(mean_y_valid - self.bsde.mean_y)
+        print(np.mean((mean_y_valid - self.bsde.mean_y)**2))
         return np.array(training_history)
 
     def loss_fn(self, inputs, training):
-        dw, x = inputs
+        dw, x, mean_y_input = inputs
         y_terminal, mean_y = self.model(inputs, training)
         delta = y_terminal - self.bsde.g_tf(self.bsde.total_time, x[:, :, -1])
         # use linear approximation outside the clipped range
@@ -59,15 +63,16 @@ class BSDESolver(object):
 
     def grad(self, inputs, training):
         with tf.GradientTape(persistent=True) as tape:
-            loss, _ = self.loss_fn(inputs, training)
+            loss, mean_y = self.loss_fn(inputs, training)
         grad = tape.gradient(loss, self.model.trainable_variables)
         del tape
-        return grad
+        return grad, mean_y
 
     @tf.function
     def train_step(self, train_data):
-        grad = self.grad(train_data, training=True)
+        grad, mean_y = self.grad(train_data, training=True)
         self.optimizer.apply_gradients(zip(grad, self.model.trainable_variables))
+        return mean_y
 
 
 class NonsharedModel(tf.keras.Model):
@@ -88,7 +93,7 @@ class NonsharedModel(tf.keras.Model):
 
     def call(self, inputs, training):
         mean_y = []
-        dw, x = inputs
+        dw, x, mean_y_input = inputs
         time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
         all_one_vec = tf.ones(shape=tf.stack([tf.shape(dw)[0], 1]), dtype=self.net_config.dtype)
         y = all_one_vec * self.y_init
@@ -99,10 +104,14 @@ class NonsharedModel(tf.keras.Model):
                 self.bsde.f_tf(time_stamp[t], x[:, :, t], y, z)
             ) + tf.reduce_sum(z * dw[:, :, t], 1, keepdims=True)
             mean_y.append(tf.reduce_mean(y))
+            if self.eqn_config.type == 2:
+                y = y + (mean_y_input[t] - self.bsde.mean_y[t]) * self.bsde.delta_t
             z = self.subnet[t](x[:, :, t + 1], training) / self.bsde.dim
         # terminal time
         y = y - self.bsde.delta_t * self.bsde.f_tf(time_stamp[-1], x[:, :, -2], y, z) + \
             tf.reduce_sum(z * dw[:, :, -1], 1, keepdims=True)
+        if self.eqn_config.type == 2:
+            y = y + (mean_y_input[-2] - self.bsde.mean_y[-2]) * self.bsde.delta_t
         mean_y.append(tf.reduce_mean(y))
 
         return y, mean_y

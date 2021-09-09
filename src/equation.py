@@ -4,8 +4,6 @@ from tensorflow import keras
 from scipy.stats import multivariate_normal as normal
 import timeit
 
-
-
 class Equation(object):
     """Base class for defining PDE related function."""
 
