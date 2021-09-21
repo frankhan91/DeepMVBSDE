@@ -27,6 +27,9 @@ class BSDESolver(object):
 
         # begin sgd iteration
         for step in range(self.net_config.num_iterations+1):
+            if self.eqn_config.type == 3 and step % 50 == 0:
+                self.bsde.update_mean_y_estimate(mean_y_train)
+                self.bsde.learn_forward()
             if step % 20 == 0:
                 train_data = self.bsde.sample(self.net_config.batch_size)
                 train_data = (train_data[0], train_data[1], mean_y_train)

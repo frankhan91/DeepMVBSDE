@@ -2,7 +2,7 @@
   "eqn_config": {
     "_comment": "",
     "eqn_name": "SineBM",
-    "type": 2,
+    "type": 3,
     "total_time": 0.5,
     "dim": 2,
     "num_time_interval": 20

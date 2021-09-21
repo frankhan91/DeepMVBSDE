@@ -18,7 +18,7 @@ import equation as eqn
 from solver import BSDESolver
 
 
-flags.DEFINE_string('config_path', 'configs/sinebw_d2.json',
+flags.DEFINE_string('config_path', 'configs/sinebw_d2_thalf.json',
                     """The path to load json file.""")
 flags.DEFINE_string('exp_name', 'test',
                     """The name of numerical experiments, prefix for logging""")
