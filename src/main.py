@@ -15,10 +15,10 @@ import numpy as np
 import tensorflow as tf
 
 import equation as eqn
-from solver import BSDESolver
+from solver import SineBMSolver, FlockSolver
 
 
-flags.DEFINE_string('config_path', 'configs/sinebw_d2_thalf.json',
+flags.DEFINE_string('config_path', 'configs/flock_d2.json',
                     """The path to load json file.""")
 flags.DEFINE_string('exp_name', 'test',
                     """The name of numerical experiments, prefix for logging""")
@@ -46,7 +46,10 @@ def main(argv):
     absl_logging.set_verbosity('info')
 
     logging.info('Begin to solve %s ' % config.eqn_config.eqn_name)
-    bsde_solver = BSDESolver(config, bsde)
+    if config.eqn_config.eqn_name == "SineBM":
+        bsde_solver = SineBMSolver(config, bsde)
+    elif config.eqn_config.eqn_name == "Flocking":
+        bsde_solver = FlockSolver(config, bsde)
     training_history = bsde_solver.train()
     if bsde.y_init:
         logging.info('Y0_true: %.4e' % bsde.y_init)

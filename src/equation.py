@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from scipy.stats import multivariate_normal as normal
+from scipy.integrate import solve_ivp
 import timeit
 
 class Equation(object):
@@ -39,7 +40,7 @@ class SineBM(Equation):
         self.mean_y_estimate = self.mean_y * 0
         self.drift_model = self.create_model()
         if eqn_config.type != 3:
-            self.learn_forward()
+            self.learn_drift()
 
     def create_model(self):
         net_width = [16, 16]
@@ -51,7 +52,7 @@ class SineBM(Equation):
         outputs = keras.layers.Dense(1, activation='relu')(x)
         return keras.Model(inputs, outputs)
 
-    def learn_forward(self):
+    def learn_drift(self):
         N_simu = 500
         N_learn = 500
         N_iter = 3
@@ -147,3 +148,39 @@ class SineBM(Equation):
 
     def g_tf(self, t, x):
         return tf.math.sin((self.total_time + tf.reduce_sum(x, 1, keepdims=True)/np.sqrt(self.dim)))
+
+
+class Flocking(Equation):
+    """Flocking in the note"""
+    def __init__(self, eqn_config):
+        super(Flocking, self).__init__(eqn_config)
+        self.x_init = np.zeros(self.dim)
+        self.v_init = np.zeros(self.dim) + 1
+        self.R, self.Q, self.C = 1, 1, 1
+        self.eta, self.xi = self.riccati_solu()
+        self.y2_init_true = self.eta[0] @ self.v_init + self.xi[0]
+
+    def riccati_solu(self):
+        n = self.dim
+        def riccati(t, y):
+            eta = np.reshape(y[:n**2], (n, n))
+            xi = y[n**2:]
+            deta = 2 * self.Q * np.identity(n) - eta @ eta / self.R / 2
+            dxi = -2 * self.Q * self.v_init[0] - eta @ xi / self.R / 2
+            dy = np.concatenate([deta.reshape([-1]), dxi])
+            return dy
+
+        y_init = np.zeros([n**2+n])
+        sol = solve_ivp(riccati, [0, self.total_time], y_init,
+                        t_eval=np.linspace(0, self.total_time, self.num_time_interval+1))
+        sol_path = np.flip(sol.y, axis=-1)
+        eta_path = np.reshape(sol_path[:n**2].transpose(), (self.num_time_interval+1, n, n))
+        xi_path = sol_path[n**2:].transpose()
+        return eta_path, xi_path
+
+    def sample(self, num_sample):
+        dw_sample = normal.rvs(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
+        x_init = np.zeros([num_sample, self.dim]) + self.x_init
+        v_init = np.zeros([num_sample, self.dim]) + self.v_init
+        data_dict = {"dw": dw_sample, "x_init": x_init, "v_init": v_init}
+        return data_dict
