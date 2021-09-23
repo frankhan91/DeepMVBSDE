@@ -126,13 +126,43 @@ class FlockSolver():
         self.net_config = config.net_config
         self.bsde = bsde
 
-        self.model = FlockSimpleNonsharedModel(config, bsde)
+        # self.model = FlockSimpleNonsharedModel(config, bsde)
+        # self.y2_init = self.model.y2_init
+        # self.train = self.train_simple
+        self.model = FlockNonsharedModel(config, bsde)
         self.y2_init = self.model.y2_init
         lr_schedule = tf.keras.optimizers.schedules.PiecewiseConstantDecay(
             self.net_config.lr_boundaries, self.net_config.lr_values)
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, epsilon=1e-8)
 
     def train(self):
+        start_time = time.time()
+        training_history = []
+        valid_data = self.bsde.sample(self.net_config.valid_size)
+
+        # begin sgd iteration
+        for step in range(self.net_config.num_iterations+1):
+            if step % 50 == 0:
+                simul_data = self.bsde.sample(self.net_config.simul_size)
+                _, path_data = self.model.simulate_abstract(simul_data, False, "MC")
+                self.bsde.learn_drift(path_data)
+            train_data = self.bsde.sample(self.net_config.batch_size)
+            self.train_step(train_data)
+            if step % self.net_config.logging_frequency == 0:
+                loss, _ = self.loss_fn(valid_data, training=False)
+                loss = loss.numpy()
+                y2_init = self.y2_init.numpy()[0]
+                elapsed_time = time.time() - start_time
+                training_history.append([step, loss, y2_init, elapsed_time])
+                if self.net_config.verbose:
+                    err_y2_init = np.mean((y2_init - self.bsde.y2_init_true)**2)
+                    logging.info("step: %5u,    loss: %.4e, err_Y2_init: %.4e,    elapsed time: %3u" % (
+                        step, loss, err_y2_init, elapsed_time))
+        print(self.bsde.y2_init_true)
+        print(y2_init)
+        return np.array(training_history)
+
+    def train_simple(self):
         start_time = time.time()
         training_history = []
         valid_data = self.bsde.sample(self.net_config.valid_size)
@@ -183,6 +213,49 @@ class FlockSolver():
         grad, path_data = self.grad(train_data, training=True)
         self.optimizer.apply_gradients(zip(grad, self.model.trainable_variables))
         return path_data
+
+
+class FlockNonsharedModel(tf.keras.Model):
+    def __init__(self, config, bsde):
+        super().__init__()
+        self.eqn_config = config.eqn_config
+        self.net_config = config.net_config
+        self.bsde = bsde
+        self.y2_init = tf.Variable(np.random.uniform(low=self.net_config.y_init_range[0],
+                                                    high=self.net_config.y_init_range[1],
+                                                    size=[self.eqn_config.dim])
+                                  )
+        self.z_init = tf.Variable(np.random.uniform(low=-.1, high=.1,
+                                                    size=[1, self.eqn_config.dim**2])
+                                  )
+        self.subnet = [FeedForwardSubNet(config, self.eqn_config.dim**2) for _ in range(self.bsde.num_time_interval-1)]
+
+    def simulate_abstract(self, inputs, training, drift_type):
+        all_one_vec = tf.ones(shape=tf.stack([tf.shape(inputs["dw"])[0], 1]), dtype=self.net_config.dtype)
+        y2 = all_one_vec * self.y2_init
+        z = tf.matmul(all_one_vec, self.z_init)
+        z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim])
+        v = inputs["v_init"]
+        drift_input = tf.zeros(shape=[0, self.eqn_config.dim+1], dtype="float64")
+        y2_drift_label = tf.zeros(shape=[0, self.eqn_config.dim], dtype="float64")
+        for t in range(0, self.bsde.num_time_interval):
+            v =  v - y2 / self.bsde.R / 2 * self.bsde.delta_t + self.bsde.C * inputs["dw"][:, :, t]
+            t_input = t*self.bsde.delta_t*all_one_vec
+            if drift_type == "NN":
+                y2_drift_term = self.bsde.y2_drift_nn(v, t_input)
+            elif drift_type == "MC":
+                y2_drift_term = self.bsde.y2_drift_mc(v, t_input)
+                y2_drift_label = tf.concat([y2_drift_label, y2_drift_term], axis=0)
+                drift_input = tf.concat([drift_input, tf.concat([v, t_input], axis=-1)], axis=0)
+            y2 = y2 - 2 * (y2_drift_term)  * self.bsde.Q * self.bsde.delta_t + (z @ inputs["dw"][:, :, t:t+1])[..., 0]
+            if t < self.bsde.num_time_interval-1:
+                z = self.subnet[t](v, training) / self.bsde.dim
+                z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim])
+        path_data = {"input": drift_input, "y2_drift": y2_drift_label}
+        return y2, path_data
+
+    def call(self, inputs, training):
+        return self.simulate_abstract(inputs, training, "NN")
 
 
 class FlockSimpleNonsharedModel(tf.keras.Model):

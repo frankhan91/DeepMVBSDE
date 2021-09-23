@@ -61,7 +61,7 @@ class SineBM(Equation):
         dt = self.delta_t
 
         batch_size = 128
-        epochs = 80            
+        epochs = 80
 
         for i in range(N_iter):
             x_path = np.zeros(shape=[N_simu, Nt+1, dim])
@@ -97,7 +97,7 @@ class SineBM(Equation):
             optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
             self.drift_model.compile(loss='mse',optimizer=optimizer)
             hist = self.drift_model.fit(
-                X, Y, batch_size=batch_size, 
+                X, Y, batch_size=batch_size,
                 epochs=epochs, verbose=0,
                 validation_split=0.05
             )
@@ -159,6 +159,7 @@ class Flocking(Equation):
         self.R, self.Q, self.C = 1, 1, 1
         self.eta, self.xi = self.riccati_solu()
         self.y2_init_true = self.eta[0] @ self.v_init + self.xi[0]
+        self.y2_drift_model = self.create_model()
 
     def riccati_solu(self):
         n = self.dim
@@ -184,3 +185,35 @@ class Flocking(Equation):
         v_init = np.zeros([num_sample, self.dim]) + self.v_init
         data_dict = {"dw": dw_sample, "x_init": x_init, "v_init": v_init}
         return data_dict
+
+    def create_model(self):
+        net_width = [16, 16]
+        activation = 'relu'
+        inputs = keras.Input(shape=(self.dim+1,))
+        x = keras.layers.Dense(net_width[0], activation=activation, dtype="float64")(inputs)
+        for w in net_width[1:]:
+            x = keras.layers.Dense(w, activation=activation, dtype="float64")(x)
+        outputs = keras.layers.Dense(self.dim, activation=None, dtype="float64")(x)
+        return keras.Model(inputs, outputs)
+
+    def learn_drift(self, path_data):
+        batch_size = 128
+        epochs = 3
+        # learn drift model
+        lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+            0.001, decay_steps=200, decay_rate=1
+        )
+        optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+        self.y2_drift_model.compile(loss='mse',optimizer=optimizer)
+        X, Y = path_data["input"].numpy(), path_data["y2_drift"].numpy()
+        hist = self.y2_drift_model.fit(
+            X, Y, batch_size=batch_size,
+            epochs=epochs, verbose=0,
+            validation_split=0.05
+        )
+
+    def y2_drift_nn(self, v, t):
+        return self.y2_drift_model(tf.concat([v, t], axis=-1))
+
+    def y2_drift_mc(self, v, t):
+        return v - tf.stop_gradient(tf.reduce_mean(v, axis=0, keepdims=True))
