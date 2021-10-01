@@ -1,7 +1,6 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from scipy.stats import multivariate_normal as normal
 from scipy.integrate import solve_ivp
 import timeit
 
@@ -109,9 +108,7 @@ class SineBM(Equation):
 
     def sample(self, num_sample):
         # start = timeit.default_timer()
-        dw_sample = normal.rvs(size=[num_sample,
-                                     self.dim,
-                                     self.num_time_interval]) * self.sqrt_delta_t
+        dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
         dim = self.dim
         Nt = self.num_time_interval
         dt = self.delta_t
@@ -154,11 +151,14 @@ class Flocking(Equation):
     """Flocking in the note"""
     def __init__(self, eqn_config):
         super(Flocking, self).__init__(eqn_config)
-        self.x_init = np.zeros(self.dim)
-        self.v_init = np.zeros(self.dim) + 1
-        self.R, self.Q, self.C = 1, 1, 1
+        self.x_init_mean = 0
+        self.x_init_sigma = 1.0
+        self.v_init_mean = 1
+        self.v_init_sigma = 1.0
+        self.R, self.Q, self.C = 0.1, 1, 0.1
         self.eta, self.xi = self.riccati_solu()
-        self.y2_init_true = self.eta[0] @ self.v_init + self.xi[0]
+        # self.y2_init_true = self.eta[0] @ self.v_init + self.xi[0]
+        self.y2_init_true_fn = lambda v: v @ self.eta[0].transpose() + self.xi[0][None, :]
         self.y2_drift_model = self.create_model()
 
     def riccati_solu(self):
@@ -167,7 +167,7 @@ class Flocking(Equation):
             eta = np.reshape(y[:n**2], (n, n))
             xi = y[n**2:]
             deta = 2 * self.Q * np.identity(n) - eta @ eta / self.R / 2
-            dxi = -2 * self.Q * self.v_init[0] - eta @ xi / self.R / 2
+            dxi = -2 * self.Q * self.v_init_mean - eta @ xi / self.R / 2
             dy = np.concatenate([deta.reshape([-1]), dxi])
             return dy
 
@@ -180,9 +180,9 @@ class Flocking(Equation):
         return eta_path, xi_path
 
     def sample(self, num_sample):
-        dw_sample = normal.rvs(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
-        x_init = np.zeros([num_sample, self.dim]) + self.x_init
-        v_init = np.zeros([num_sample, self.dim]) + self.v_init
+        dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
+        x_init = np.random.normal(size=[num_sample, self.dim]) * self.x_init_sigma + self.x_init_mean
+        v_init = np.random.normal(size=[num_sample, self.dim]) * self.v_init_sigma + self.v_init_mean
         data_dict = {"dw": dw_sample, "x_init": x_init, "v_init": v_init}
         return data_dict
 

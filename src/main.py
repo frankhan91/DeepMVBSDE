@@ -18,7 +18,7 @@ import equation as eqn
 from solver import SineBMSolver, FlockSolver
 
 
-flags.DEFINE_string('config_path', 'configs/flock_d2.json',
+flags.DEFINE_string('config_path', 'configs/flock_d3.json',
                     """The path to load json file.""")
 flags.DEFINE_string('exp_name', 'test',
                     """The name of numerical experiments, prefix for logging""")
@@ -55,12 +55,12 @@ def main(argv):
         logging.info('Y0_true: %.4e' % bsde.y_init)
         logging.info('relative error of Y0: %s',
                      '{:.2%}'.format(abs(bsde.y_init - training_history[-1, 2])/bsde.y_init))
-    np.savetxt('{}_training_history.csv'.format(path_prefix),
-               training_history,
-               fmt=['%d', '%.5e', '%.5e', '%d'],
-               delimiter=",",
-               header='step,loss_function,target_value,elapsed_time',
-               comments='')
+    # np.savetxt('{}_training_history.csv'.format(path_prefix),
+    #            training_history,
+    #            fmt=['%d', '%.5e', '%.5e', '%d'],
+    #            delimiter=",",
+    #            header='step,loss_function,target_value,elapsed_time',
+    #            comments='')
 
 
 if __name__ == '__main__':
