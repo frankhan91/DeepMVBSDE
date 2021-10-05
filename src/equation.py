@@ -154,12 +154,12 @@ class Flocking(Equation):
         self.x_init_mean = 0
         self.x_init_sigma = 1.0
         self.v_init_mean = 1
-        self.v_init_sigma = 1.0
-        self.R, self.Q, self.C = 0.1, 1, 0.1
+        self.v_init_sigma = 0.5
+        self.R, self.Q, self.C = 0.5, 1, 0.1
         self.eta, self.xi = self.riccati_solu()
         # self.y2_init_true = self.eta[0] @ self.v_init + self.xi[0]
         self.y2_init_true_fn = lambda v: v @ self.eta[0].transpose() + self.xi[0][None, :]
-        self.y2_drift_model = self.create_model()
+        self.y_drift_model = self.create_model()
 
     def riccati_solu(self):
         n = self.dim
@@ -180,9 +180,9 @@ class Flocking(Equation):
         return eta_path, xi_path
 
     def sample(self, num_sample):
-        dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
-        x_init = np.random.normal(size=[num_sample, self.dim]) * self.x_init_sigma + self.x_init_mean
-        v_init = np.random.normal(size=[num_sample, self.dim]) * self.v_init_sigma + self.v_init_mean
+        dw_sample = np.random.normal(scale=self.sqrt_delta_t, size=[num_sample, self.dim, self.num_time_interval])
+        x_init = np.random.normal(loc=self.x_init_mean, scale=self.x_init_sigma, size=[num_sample, self.dim])
+        v_init = np.random.normal(loc=self.v_init_mean, scale=self.v_init_sigma, size=[num_sample, self.dim])
         data_dict = {"dw": dw_sample, "x_init": x_init, "v_init": v_init}
         return data_dict
 
@@ -204,16 +204,16 @@ class Flocking(Equation):
             0.001, decay_steps=200, decay_rate=1
         )
         optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
-        self.y2_drift_model.compile(loss='mse',optimizer=optimizer)
-        X, Y = path_data["input"].numpy(), path_data["y2_drift"].numpy()
-        hist = self.y2_drift_model.fit(
+        self.y_drift_model.compile(loss='mse',optimizer=optimizer)
+        X, Y = path_data["input"].numpy(), path_data["y_drift"].numpy()
+        hist = self.y_drift_model.fit(
             X, Y, batch_size=batch_size,
             epochs=epochs, verbose=0,
             validation_split=0.05
         )
 
     def y2_drift_nn(self, v, t):
-        return self.y2_drift_model(tf.concat([v, t], axis=-1))
+        return self.y_drift_model(tf.concat([v, t], axis=-1))
 
     def y2_drift_mc(self, v, t):
         return v - tf.stop_gradient(tf.reduce_mean(v, axis=0, keepdims=True))
