@@ -52,7 +52,10 @@ class SineBMSolver():
         print(self.bsde.mean_y)
         print(mean_y_valid - self.bsde.mean_y)
         print(np.mean((mean_y_valid - self.bsde.mean_y)**2))
-        return np.array(training_history)
+        train_result = {
+            "history": np.array(training_history),
+        }
+        return train_result
 
     def loss_fn(self, inputs, training):
         dw, x, mean_y_input = inputs
@@ -149,20 +152,28 @@ class FlockSolver():
                 loss, _ = self.loss_fn(valid_data, training=False)
                 loss = loss.numpy()
                 elapsed_time = time.time() - start_time
-                training_history.append([step, loss, elapsed_time])
-                if self.net_config.verbose:
-                    y2_init = self.model.y2_init_predict(valid_data)
-                    err_y2_init = np.mean((y2_init - valid_y2_init_true)**2)
-                    logging.info("step: %5u,    loss: %.4e, err_Y2_init: %.4e,    elapsed time: %3u" % (
-                        step, loss, err_y2_init, elapsed_time))
+                y2_init = self.model.y2_init_predict(valid_data).numpy()
+                err_y2_init = np.mean((y2_init - valid_y2_init_true)**2)
+                logging.info("step: %5u,    loss: %.4e, err_Y2_init: %.4e,    elapsed time: %3u" % (
+                    step, loss, err_y2_init, elapsed_time))
+                training_history.append([step, loss, err_y2_init, elapsed_time])
+        np.random.seed(self.eqn_config.simul_seed)
         valid_data = self.bsde.sample(self.net_config.simul_size)
         valid_y2_init_true = self.bsde.y2_init_true_fn(valid_data["v_init"])
-        y2_init = self.model.y2_init_predict(valid_data)
+        y2_init = self.model.y2_init_predict(valid_data).numpy()
         print("Y2_true", valid_y2_init_true[:3])
         _, path_data = self.model.simulate_abstract(valid_data, training=False, drift_type="MC")
-        print("Y2_approx", y2_init[:3].numpy())
-        print("Std of v_terminal", path_data["v_terminal"].numpy().std())
-        return np.array(training_history)
+        print("Y2_approx", y2_init[:3])
+        print("Std of v_terminal", path_data["v_std"].numpy()[-1])
+        y2_err = np.mean((y2_init - valid_y2_init_true)**2)
+        y2_square = np.mean(y2_init**2)
+        train_result = {
+            "history": np.array(training_history),
+            "y2_err": y2_err,
+            "R2": 1 - y2_err / y2_square,
+            "v_std": path_data["v_std"].numpy()
+        }
+        return train_result
 
     def loss_fn(self, inputs, training):
         y_terminal, path_data = self.model(inputs, training)
@@ -201,6 +212,7 @@ class FlockNonsharedModel(tf.keras.Model):
     def simulate_abstract(self, inputs, training, drift_type):
         all_one_vec = tf.ones(shape=tf.stack([tf.shape(inputs["dw"])[0], 1]), dtype=self.net_config.dtype)
         x, v = inputs["x_init"], inputs["v_init"]
+        v_std = [tf.math.reduce_std(v[:, 0])]
         y = self.y_init_net(tf.concat([x, v], axis=1))
         y1, y2 = y[:, :self.eqn_config.dim], y[:, self.eqn_config.dim:]
         z = self.z_subnet[0](v, training) / self.bsde.dim
@@ -221,10 +233,12 @@ class FlockNonsharedModel(tf.keras.Model):
             diffusion_term = (z @ inputs["dw"][:, :, t:t+1])[..., 0]
             y1 = y1 - (y1_drift_term) * self.bsde.delta_t + diffusion_term[:, :self.eqn_config.dim]
             y2 = y2 - (y1 + y2_drift_term) * self.bsde.delta_t + diffusion_term[:, self.eqn_config.dim:]
+            v_std.append(tf.math.reduce_std(v[:, 0]))
             if t < self.bsde.num_time_interval-1:
                 z = self.z_subnet[t+1](v, training) / self.bsde.dim
                 z = tf.reshape(z, [-1, 2*self.eqn_config.dim, self.eqn_config.dim])
-        path_data = {"input": drift_input, "y_drift": y_drift_label, "v_terminal": v}
+        v_std = tf.stack(v_std, axis=0)
+        path_data = {"input": drift_input, "y_drift": y_drift_label, "v_std": v_std}
         y = tf.concat([y1, y2], axis=1)
         return y, path_data
 

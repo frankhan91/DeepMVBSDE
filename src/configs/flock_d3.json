@@ -5,7 +5,8 @@
     "total_time": 1,
     "dim": 3,
     "beta": 0,
-    "num_time_interval": 50
+    "num_time_interval": 50,
+    "simul_seed": 123
   },
   "net_config": {
     "y_init_range": [0, 1],
@@ -17,7 +18,6 @@
     "batch_size": 128,
     "valid_size": 256,
     "logging_frequency": 100,
-    "dtype": "float64",
-    "verbose": true
+    "dtype": "float64"
   }
 }

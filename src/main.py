@@ -23,7 +23,7 @@ flags.DEFINE_string('config_path', 'configs/flock_d3.json',
 flags.DEFINE_string('exp_name', 'test',
                     """The name of numerical experiments, prefix for logging""")
 FLAGS = flags.FLAGS
-FLAGS.log_dir = './logs'  # directory where to write event logs and output array
+FLAGS.log_dir = '../logs'  # directory where to write event logs and output array
 
 
 def main(argv):
@@ -50,17 +50,18 @@ def main(argv):
         bsde_solver = SineBMSolver(config, bsde)
     elif config.eqn_config.eqn_name == "Flocking":
         bsde_solver = FlockSolver(config, bsde)
-    training_history = bsde_solver.train()
-    if bsde.y_init:
-        logging.info('Y0_true: %.4e' % bsde.y_init)
-        logging.info('relative error of Y0: %s',
-                     '{:.2%}'.format(abs(bsde.y_init - training_history[-1, 2])/bsde.y_init))
-    # np.savetxt('{}_training_history.csv'.format(path_prefix),
-    #            training_history,
-    #            fmt=['%d', '%.5e', '%.5e', '%d'],
-    #            delimiter=",",
-    #            header='step,loss_function,target_value,elapsed_time',
-    #            comments='')
+    result = bsde_solver.train()
+    if config.eqn_config.eqn_name == "Flocking":
+        result_str = "R2: {}, y2_err: {}\n".format(result["R2"], result["y2_err"]) + \
+            "v_std:\n" + np.array2string(result["v_std"], max_line_width=10000, separator=',', formatter={'float_kind':lambda x: "%.6f" % x}) + "\n"
+    else:
+        result_str = ""
+    np.savetxt('{}_result.txt'.format(path_prefix),
+               result["history"],
+               fmt=['%d', '%.5e', '%.5e', '%d'],
+               delimiter=",",
+               header=result_str+'step,loss_function,target_value,elapsed_time',
+               comments='')
 
 
 if __name__ == '__main__':
