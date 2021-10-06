@@ -189,11 +189,13 @@ class Flocking(Equation):
     def create_model(self):
         net_width = [16, 16]
         activation = 'relu'
-        inputs = keras.Input(shape=(self.dim+1,))
+        # inputs = keras.Input(shape=(self.dim+1,))
+        inputs = keras.Input(shape=(2*self.dim+1,))
         x = keras.layers.Dense(net_width[0], activation=activation, dtype="float64")(inputs)
         for w in net_width[1:]:
             x = keras.layers.Dense(w, activation=activation, dtype="float64")(x)
-        outputs = keras.layers.Dense(self.dim, activation=None, dtype="float64")(x)
+        # outputs = keras.layers.Dense(self.dim, activation=None, dtype="float64")(x)
+        outputs = keras.layers.Dense(2*self.dim, activation=None, dtype="float64")(x)
         return keras.Model(inputs, outputs)
 
     def learn_drift(self, path_data):
@@ -212,8 +214,29 @@ class Flocking(Equation):
             validation_split=0.05
         )
 
-    def y2_drift_nn(self, v, t):
-        return self.y_drift_model(tf.concat([v, t], axis=-1))
+    def y_drift_nn(self, t, x, v):
+        y_drift = self.y_drift_model(tf.concat([t, x, v], axis=1))
+        y1_drift, y2_drift = y_drift[:, :self.dim], y_drift[:, self.dim:]
+        return y1_drift, y2_drift
 
-    def y2_drift_mc(self, v, t):
-        return v - tf.stop_gradient(tf.reduce_mean(v, axis=0, keepdims=True))
+    def y_drift_mc(self, t, x, v):
+        delta_x = tf.expand_dims(x, axis=1) - x # B * B * 3, x - x'
+        delta_v = tf.expand_dims(v, axis=1) - v # B * B * 3. v - v'
+        x_norm2 = tf.reduce_sum(delta_x**2, axis=2, keepdims=True) # B * B * 1
+        weight = 1 / tf.math.pow(1+x_norm2, self.eqn_config.beta) # B * B * 1
+        weight_mean = tf.reduce_mean(weight, axis=1) # B * 1
+        partial_weight = -2 * self.eqn_config.beta * tf.expand_dims(x, axis=1) / tf.math.pow(1+x_norm2, self.eqn_config.beta+1) # B * B * 3
+        partial_weight_v = tf.expand_dims(partial_weight, axis=-1) @ tf.expand_dims(-delta_v, axis=2) # B * B * 3 * 3
+        partial_weight_v_mean = tf.reduce_mean(partial_weight_v, axis=1) # B * 3 * 3
+        weight_v_mean = tf.reduce_mean(weight * -delta_v, axis=1) # B * 3
+        weight_v_mean_expand = tf.expand_dims(weight_v_mean, axis=-1) # B * 3 * 1
+        y1_drift = 2 * self.Q * partial_weight_v_mean @ weight_v_mean_expand
+        y1_drift = y1_drift[..., 0]
+        y2_drift = -2 * self.Q * weight_mean * weight_v_mean
+        return y1_drift, y2_drift
+
+    # def y2_drift_nn(self, v, t):
+    #     return self.y_drift_model(tf.concat([v, t], axis=-1))
+
+    # def y2_drift_mc(self, v, t):
+    #     return v - tf.stop_gradient(tf.reduce_mean(v, axis=0, keepdims=True))

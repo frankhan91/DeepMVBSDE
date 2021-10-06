@@ -193,38 +193,71 @@ class FlockNonsharedModel(tf.keras.Model):
         self.eqn_config = config.eqn_config
         self.net_config = config.net_config
         self.bsde = bsde
-        self.y2_init_net = FeedForwardSubNet(config, self.eqn_config.dim)
-        self.z_subnet = [FeedForwardSubNet(config, self.eqn_config.dim**2) for _ in range(self.bsde.num_time_interval)]
+        self.y_init_net = FeedForwardSubNet(config, self.eqn_config.dim*2)
+        self.z_subnet = [FeedForwardSubNet(config, self.eqn_config.dim**2*2) for _ in range(self.bsde.num_time_interval)]
+        # self.y2_init_net = FeedForwardSubNet(config, self.eqn_config.dim)
+        # self.z_subnet = [FeedForwardSubNet(config, self.eqn_config.dim**2) for _ in range(self.bsde.num_time_interval)]
 
     def simulate_abstract(self, inputs, training, drift_type):
         all_one_vec = tf.ones(shape=tf.stack([tf.shape(inputs["dw"])[0], 1]), dtype=self.net_config.dtype)
-        v = inputs["v_init"]
-        y2 = self.y2_init_net(v)
-        # y2 = self.y2_init_net(v) * 0 + self.bsde.y2_init_true_fn(v)
+        x, v = inputs["x_init"], inputs["v_init"]
+        y = self.y_init_net(tf.concat([x, v], axis=1))
+        y1, y2 = y[:, :self.eqn_config.dim], y[:, self.eqn_config.dim:]
         z = self.z_subnet[0](v, training) / self.bsde.dim
-        z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim])
-        # z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim]) * 0 + self.bsde.eta[0] * self.bsde.C
-        drift_input = tf.zeros(shape=[0, self.eqn_config.dim+1], dtype="float64")
-        y2_drift_label = tf.zeros(shape=[0, self.eqn_config.dim], dtype="float64")
+        z = tf.reshape(z, [-1, 2*self.eqn_config.dim, self.eqn_config.dim])
+        drift_input = tf.zeros(shape=[0, 2*self.eqn_config.dim+1], dtype="float64")
+        y_drift_label = tf.zeros(shape=[0, 2*self.eqn_config.dim], dtype="float64")
         for t in range(0, self.bsde.num_time_interval):
             t_input = t*self.bsde.delta_t*all_one_vec
             if drift_type == "NN":
-                y2_drift_term = self.bsde.y2_drift_nn(v, t_input)
+                y1_drift_term, y2_drift_term = self.bsde.y_drift_nn(t_input, x, v)
             elif drift_type == "MC":
-                y2_drift_term = self.bsde.y2_drift_mc(v, t_input)
-                y2_drift_label = tf.concat([y2_drift_label, y2_drift_term], axis=0)
-                drift_input = tf.concat([drift_input, tf.concat([v, t_input], axis=-1)], axis=0)
-            v =  v - y2 / self.bsde.R / 2 * self.bsde.delta_t + self.bsde.C * inputs["dw"][:, :, t]
-            y2 = y2 - 2 * (y2_drift_term) * self.bsde.Q * self.bsde.delta_t + (z @ inputs["dw"][:, :, t:t+1])[..., 0]
+                y1_drift_term, y2_drift_term = self.bsde.y_drift_mc(t_input, x, v)
+                y_drift_term = tf.concat([y1_drift_term, y2_drift_term], axis=1)
+                y_drift_label = tf.concat([y_drift_label, y_drift_term], axis=0)
+                drift_input = tf.concat([drift_input, tf.concat([t_input, x, v], axis=1)], axis=0)
+            x = x + v * self.bsde.delta_t
+            v = v - y2 / self.bsde.R / 2 * self.bsde.delta_t + self.bsde.C * inputs["dw"][:, :, t]
+            diffusion_term = (z @ inputs["dw"][:, :, t:t+1])[..., 0]
+            y1 = y1 - (y1_drift_term) * self.bsde.delta_t + diffusion_term[:, :self.eqn_config.dim]
+            y2 = y2 - (y1 + y2_drift_term) * self.bsde.delta_t + diffusion_term[:, self.eqn_config.dim:]
             if t < self.bsde.num_time_interval-1:
                 z = self.z_subnet[t+1](v, training) / self.bsde.dim
-                z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim])
-                # z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim]) * 0 + self.bsde.eta[t+1] * self.bsde.C
-        path_data = {"input": drift_input, "y_drift": y2_drift_label, "v_terminal": v}
-        return y2, path_data
+                z = tf.reshape(z, [-1, 2*self.eqn_config.dim, self.eqn_config.dim])
+        path_data = {"input": drift_input, "y_drift": y_drift_label, "v_terminal": v}
+        y = tf.concat([y1, y2], axis=1)
+        return y, path_data
+
+    # def simulate_y2_abstract(self, inputs, training, drift_type):
+    #     all_one_vec = tf.ones(shape=tf.stack([tf.shape(inputs["dw"])[0], 1]), dtype=self.net_config.dtype)
+    #     v = inputs["v_init"]
+    #     y2 = self.y2_init_net(v)
+    #     # y2 = self.y2_init_net(v) * 0 + self.bsde.y2_init_true_fn(v)
+    #     z = self.z_subnet[0](v, training) / self.bsde.dim
+    #     z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim])
+    #     # z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim]) * 0 + self.bsde.eta[0] * self.bsde.C
+    #     drift_input = tf.zeros(shape=[0, self.eqn_config.dim+1], dtype="float64")
+    #     y2_drift_label = tf.zeros(shape=[0, self.eqn_config.dim], dtype="float64")
+    #     for t in range(0, self.bsde.num_time_interval):
+    #         t_input = t*self.bsde.delta_t*all_one_vec
+    #         if drift_type == "NN":
+    #             y2_drift_term = self.bsde.y2_drift_nn(v, t_input)
+    #         elif drift_type == "MC":
+    #             y2_drift_term = self.bsde.y2_drift_mc(v, t_input)
+    #             y2_drift_label = tf.concat([y2_drift_label, y2_drift_term], axis=0)
+    #             drift_input = tf.concat([drift_input, tf.concat([v, t_input], axis=-1)], axis=0)
+    #         v =  v - y2 / self.bsde.R / 2 * self.bsde.delta_t + self.bsde.C * inputs["dw"][:, :, t]
+    #         y2 = y2 - 2 * (y2_drift_term) * self.bsde.Q * self.bsde.delta_t + (z @ inputs["dw"][:, :, t:t+1])[..., 0]
+    #         if t < self.bsde.num_time_interval-1:
+    #             z = self.z_subnet[t+1](v, training) / self.bsde.dim
+    #             z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim])
+    #             # z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim]) * 0 + self.bsde.eta[t+1] * self.bsde.C
+    #     path_data = {"input": drift_input, "y_drift": y2_drift_label, "v_terminal": v}
+    #     return y2, path_data
 
     def y2_init_predict(self, inputs, training=False):
-        return self.y2_init_net(inputs["v_init"], training)
+        return self.y_init_net(tf.concat([inputs["x_init"], inputs["v_init"]], axis=1), training)[:, self.eqn_config.dim:]
+        # return self.y2_init_net(inputs["v_init"], training)
 
     def call(self, inputs, training):
         return self.simulate_abstract(inputs, training, "NN")
