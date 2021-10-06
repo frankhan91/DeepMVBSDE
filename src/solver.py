@@ -155,9 +155,9 @@ class FlockSolver():
                     err_y2_init = np.mean((y2_init - valid_y2_init_true)**2)
                     logging.info("step: %5u,    loss: %.4e, err_Y2_init: %.4e,    elapsed time: %3u" % (
                         step, loss, err_y2_init, elapsed_time))
-        valid_data = self.bsde.sample(self.net_config.valid_size*10)
+        valid_data = self.bsde.sample(self.net_config.simul_size)
         valid_y2_init_true = self.bsde.y2_init_true_fn(valid_data["v_init"])
-        y2_init =self.model.y2_init_predict(valid_data)
+        y2_init = self.model.y2_init_predict(valid_data)
         print("Y2_true", valid_y2_init_true[:3])
         _, path_data = self.model.simulate_abstract(valid_data, training=False, drift_type="MC")
         print("Y2_approx", y2_init[:3].numpy())

@@ -2,7 +2,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from scipy.integrate import solve_ivp
-import timeit
 
 class Equation(object):
     """Base class for defining PDE related function."""
@@ -154,7 +153,7 @@ class Flocking(Equation):
         self.x_init_mean = 0
         self.x_init_sigma = 1.0
         self.v_init_mean = 1
-        self.v_init_sigma = 0.5
+        self.v_init_sigma = 1.0
         self.R, self.Q, self.C = 0.5, 1, 0.1
         self.eta, self.xi = self.riccati_solu()
         # self.y2_init_true = self.eta[0] @ self.v_init + self.xi[0]
@@ -187,7 +186,7 @@ class Flocking(Equation):
         return data_dict
 
     def create_model(self):
-        net_width = [16, 16]
+        net_width = [48, 48]
         activation = 'relu'
         # inputs = keras.Input(shape=(self.dim+1,))
         inputs = keras.Input(shape=(2*self.dim+1,))
