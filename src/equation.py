@@ -42,12 +42,12 @@ class SineBM(Equation):
 
     def create_model(self):
         net_width = [16, 16]
-        activation = 'relu'
+        activation = 'softplus'
         inputs = keras.Input(shape=(self.dim+1,))
         x = keras.layers.Dense(net_width[0], activation=activation)(inputs)
         for w in net_width[1:]:
             x = keras.layers.Dense(w, activation=activation)(x)
-        outputs = keras.layers.Dense(1, activation='relu')(x)
+        outputs = keras.layers.Dense(1, activation='softplus')(x)
         return keras.Model(inputs, outputs)
 
     def learn_drift(self):
@@ -61,7 +61,7 @@ class SineBM(Equation):
         batch_size = 128
         epochs = 80
 
-        for i in range(N_iter):
+        for _ in range(N_iter):
             x_path = np.zeros(shape=[N_simu, Nt+1, dim])
 
             for i, t in enumerate(self.t_grid):
