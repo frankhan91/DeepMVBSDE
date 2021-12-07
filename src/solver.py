@@ -59,11 +59,15 @@ class SineBMSolver():
 
     def loss_fn(self, inputs, training):
         dw, x, mean_y_input = inputs
-        y_terminal, mean_y = self.model(inputs, training)
-        delta = y_terminal - self.bsde.g_tf(self.bsde.total_time, x[:, :, -1])
+        y_terminal, mean_y, loss_inter = self.model(inputs, training)
+        y_target = self.bsde.g_tf(self.bsde.total_time, x[:, :, -1])
+        delta = y_terminal - y_target
+        mean_y.append(tf.reduce_mean(y_target))
         # use linear approximation outside the clipped range
-        loss = tf.reduce_mean(tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
-                                       2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2))
+        loss = loss_inter + tf.reduce_mean(
+            tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
+            2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2)
+        )
 
         return loss, mean_y
 
@@ -97,6 +101,7 @@ class SineBMNonsharedModel(tf.keras.Model):
         self.subnet = [FeedForwardSubNet(config, self.eqn_config.dim) for _ in range(self.bsde.num_time_interval-1)]
 
     def call(self, inputs, training):
+        loss_inter = 0
         mean_y = []
         dw, x, mean_y_input = inputs
         time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
@@ -117,9 +122,8 @@ class SineBMNonsharedModel(tf.keras.Model):
             tf.reduce_sum(z * dw[:, :, -1], 1, keepdims=True)
         if self.eqn_config.type == 2:
             y = y + (mean_y_input[-2] - self.bsde.mean_y[-2]) * self.bsde.delta_t
-        mean_y.append(tf.reduce_mean(y))
 
-        return y, mean_y
+        return y, mean_y, loss_inter
 
 
 class FlockSolver():
