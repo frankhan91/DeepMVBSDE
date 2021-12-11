@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow import keras
 from scipy.integrate import solve_ivp
 
-class Equation(object):
+class Equation():
     """Base class for defining PDE related function."""
 
     def __init__(self, eqn_config):
@@ -75,8 +75,8 @@ class SineBM(Equation):
                     if self.eqn_config.type == 3:
                         x_path[:, i+1, :] += (self.mean_y_estimate[i] - self.mean_y[i]) * dt
 
-            term_approx = np.zeros(shape=[N_learn, self.t_grid.shape[0]])
-            term_true = np.zeros(shape=[N_learn, self.t_grid.shape[0]])
+            term_approx = np.zeros(shape=[N_learn, self.t_grid.shape[0]]) # pylint: disable=unsubscriptable-object
+            term_true = np.zeros(shape=[N_learn, self.t_grid.shape[0]]) # pylint: disable=unsubscriptable-object
             path_idx = np.random.choice(N_simu, N_learn, replace=False)
             for i, t in enumerate(self.t_grid):
                 term_true[:, i] = np.exp(-np.sum(x_path[path_idx, i]**2, axis=-1)/(dim + 2*t))*(dim/(dim+2*t))**(dim/2)
@@ -143,7 +143,10 @@ class SineBM(Equation):
         return  - term1 - term2
 
     def g_tf(self, t, x):
-        return tf.math.sin((self.total_time + tf.reduce_sum(x, 1, keepdims=True)/np.sqrt(self.dim)))
+        return tf.math.sin(t + tf.reduce_sum(x, 1, keepdims=True)/np.sqrt(self.dim))
+
+    def z_true(self, t, x):
+        return tf.math.cos(t + tf.reduce_sum(x, 1, keepdims=True)/np.sqrt(self.dim)) / np.sqrt(self.dim)
 
 
 class Flocking(Equation):

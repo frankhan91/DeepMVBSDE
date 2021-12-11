@@ -8,15 +8,19 @@
     "num_time_interval": 50
   },
   "net_config": {
+    "loss_type": "DeepBSDE",
     "y_init_range": [0, 1],
     "num_hiddens": [16, 16],
-    "lr_values": [1e-2, 1e-3],
-    "lr_boundaries": [3000],
-    "num_iterations": 6000,
     "batch_size": 64,
     "valid_size": 256,
     "logging_frequency": 100,
     "dtype": "float64",
-    "verbose": true
+    "verbose": true,
+    "opt_config1": {
+      "_comment": "DeepBSDE",
+      "lr_values": [1e-2, 1e-3],
+      "lr_boundaries": [3000],
+      "num_iterations": 6000
+    }
   }
 }

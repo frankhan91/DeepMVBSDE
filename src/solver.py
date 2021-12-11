@@ -13,10 +13,15 @@ class SineBMSolver():
         self.net_config = config.net_config
         self.bsde = bsde
 
-        self.model = SineBMNonsharedModel(config, bsde)
+        if self.net_config.loss_type == "DeepBSDE":
+            self.model = SineBMNonsharedModel(config, bsde)
+            self.opt_config = self.net_config.opt_config1
+        elif self.net_config.loss_type == "DBDPsingle":
+            self.model = SineBMNonsharedModelBDPSingle(config, bsde)
+            self.opt_config = self.net_config.opt_config2
         self.y_init = self.model.y_init
         lr_schedule = tf.keras.optimizers.schedules.PiecewiseConstantDecay(
-            self.net_config.lr_boundaries, self.net_config.lr_values)
+            self.opt_config.lr_boundaries, self.opt_config.lr_values)
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, epsilon=1e-8)
 
     def train(self):
@@ -26,7 +31,7 @@ class SineBMSolver():
         mean_y_train = self.bsde.mean_y * 0
 
         # begin sgd iteration
-        for step in range(self.net_config.num_iterations+1):
+        for step in range(self.opt_config.num_iterations+1):
             if self.eqn_config.type == 3 and step % 50 == 0:
                 self.bsde.update_mean_y_estimate(mean_y_train)
                 self.bsde.learn_drift()
@@ -124,6 +129,52 @@ class SineBMNonsharedModel(tf.keras.Model):
             y = y + (mean_y_input[-2] - self.bsde.mean_y[-2]) * self.bsde.delta_t
 
         return y, mean_y, loss_inter
+
+class SineBMNonsharedModelBDPSingle(tf.keras.Model):
+    def __init__(self, config, bsde):
+        super().__init__()
+        self.eqn_config = config.eqn_config
+        self.net_config = config.net_config
+        self.bsde = bsde
+        self.y_init = tf.Variable(np.random.uniform(low=self.net_config.y_init_range[0],
+                                                    high=self.net_config.y_init_range[1],
+                                                    size=[1])
+                                  )
+        self.z_init = tf.Variable(np.random.uniform(low=-.1, high=.1,
+                                                    size=[1, self.eqn_config.dim])
+                                  )
+        self.subnetz = [FeedForwardSubNet(config, self.eqn_config.dim) for _ in range(self.bsde.num_time_interval-1)]
+        self.subnety = [FeedForwardSubNet(config, 1) for _ in range(self.bsde.num_time_interval-1)]
+        # self.nety = FeedForwardNoBNSubNet(config, 1)
+
+    def call(self, inputs, training):
+        loss_inter = 0
+        mean_y = []
+        dw, x, mean_y_input = inputs
+        time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
+        all_one_vec = tf.ones(shape=tf.stack([tf.shape(dw)[0], 1]), dtype=self.net_config.dtype)
+        y_now = all_one_vec * self.y_init
+        z = tf.matmul(all_one_vec, self.z_init)
+        mean_y.append(tf.reduce_mean(y_now))
+        for t in range(0, self.bsde.num_time_interval-1):
+            y_predict = y_now - self.bsde.delta_t * (
+                self.bsde.f_tf(time_stamp[t], x[:, :, t], y_now, z)
+            ) + tf.reduce_sum(z * dw[:, :, t], 1, keepdims=True)
+            if self.eqn_config.type == 2:
+                y_predict = y_predict + (mean_y_input[t] - self.bsde.mean_y[t]) * self.bsde.delta_t
+            y_next = self.subnety[t](x[:, :, t + 1], training)
+            # y_next = self.nety(tf.concat([x[:, :, t+1], time_stamp[t+1]*all_one_vec], axis=-1))
+            loss_inter += tf.reduce_mean((y_predict - tf.stop_gradient(y_next))**2)
+            mean_y.append(tf.reduce_mean(y_next))
+            y_now = y_next
+            z = self.subnetz[t](x[:, :, t + 1], training) / self.bsde.dim
+        # terminal time
+        y_terminal = y_now - self.bsde.delta_t * self.bsde.f_tf(time_stamp[-1], x[:, :, -2], y_now, z) + \
+            tf.reduce_sum(z * dw[:, :, -1], 1, keepdims=True)
+        if self.eqn_config.type == 2:
+            y_terminal = y_terminal + (mean_y_input[-2] - self.bsde.mean_y[-2]) * self.bsde.delta_t
+
+        return y_terminal, mean_y, loss_inter
 
 
 class FlockSolver():
@@ -309,4 +360,23 @@ class FeedForwardSubNet(tf.keras.Model):
             x = tf.nn.relu(x)
         x = self.dense_layers[-1](x)
         x = self.bn_layers[-1](x, training)
+        return x
+
+class FeedForwardNoBNSubNet(tf.keras.Model):
+    def __init__(self, config, dim_out):
+        super().__init__()
+        num_hiddens = config.net_config.num_hiddens
+        self.dense_layers = [tf.keras.layers.Dense(num_hiddens[i],
+                                                   use_bias=False,
+                                                   activation=None)
+                             for i in range(len(num_hiddens))]
+        # final output should be gradient of size dim
+        self.dense_layers.append(tf.keras.layers.Dense(dim_out, activation=None))
+
+    def call(self, x, training):
+        """structure: bn -> (dense -> bn -> relu) * len(num_hiddens) -> dense -> bn"""
+        for i in range(len(self.dense_layers) - 1):
+            x = self.dense_layers[i](x)
+            x = tf.nn.relu(x)
+        x = self.dense_layers[-1](x)
         return x
