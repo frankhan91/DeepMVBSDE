@@ -15,7 +15,7 @@ import numpy as np
 import tensorflow as tf
 
 import equation as eqn
-from solver import SineBMSolver, FlockSolver
+from solver import SineBMSolver, SineBMDBDPSolver, FlockSolver
 
 
 flags.DEFINE_string('config_path', 'configs/sinebm_d2_thalf.json',
@@ -47,7 +47,10 @@ def main(argv):
 
     logging.info('Begin to solve %s ' % config.eqn_config.eqn_name)
     if config.eqn_config.eqn_name == "SineBM":
-        bsde_solver = SineBMSolver(config, bsde)
+        if config.net_config.loss_type == "DBDPiter":
+            bsde_solver = SineBMDBDPSolver(config, bsde)
+        else:
+            bsde_solver = SineBMSolver(config, bsde)
     elif config.eqn_config.eqn_name == "Flocking":
         bsde_solver = FlockSolver(config, bsde)
     result = bsde_solver.train()

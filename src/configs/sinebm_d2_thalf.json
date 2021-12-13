@@ -27,6 +27,12 @@
       "lr_values": [1e-2, 1e-3, 1e-4],
       "lr_boundaries": [1000, 2000],
       "num_iterations": 8000
+    },
+    "opt_config3": {
+      "_comment": "DBDPiter",
+      "lr_values": [1e-4, 1e-4],
+      "lr_boundaries": [1000],
+      "num_iterations": 8000
     }
   }
 }

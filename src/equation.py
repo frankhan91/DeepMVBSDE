@@ -5,7 +5,6 @@ from scipy.integrate import solve_ivp
 
 class Equation():
     """Base class for defining PDE related function."""
-
     def __init__(self, eqn_config):
         self.eqn_config = eqn_config
         self.dim = eqn_config.dim
@@ -105,7 +104,7 @@ class SineBM(Equation):
             print("R^2: {}".format(r2))
         # assert r2 < 0.01, "Failed learning of the forward model"
 
-    def sample(self, num_sample):
+    def sample(self, num_sample, withtime=False):
         # start = timeit.default_timer()
         dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
         dim = self.dim
@@ -123,9 +122,14 @@ class SineBM(Equation):
                     dw_sample[:, :, i]
                 if self.eqn_config.type == 3:
                     x_sample[:, i+1, :] += (self.mean_y_estimate[i] - self.mean_y[i]) * dt
+        if withtime:
+            t_data = np.zeros([num_sample, self.num_time_interval + 1, 1])
+            for i, t in enumerate(self.t_grid):
+                t_data[:, i, :] = t
+            x_sample = np.concatenate([x_sample, t_data], axis=-1)
         x_sample = x_sample.transpose((0, 2, 1))
         # stop = timeit.default_timer()
-        # print('Time: ', stop - start)  
+        # print('Time: ', stop - start)
         return dw_sample, x_sample
 
         # x_sample = np.zeros([num_sample, self.dim, self.num_time_interval + 1])
@@ -135,9 +139,10 @@ class SineBM(Equation):
         # return dw_sample, x_sample
 
     def update_mean_y_estimate(self, mean_y_estimate):
-        self.mean_y_estimate = mean_y_estimate
+        self.mean_y_estimate = mean_y_estimate.copy()
 
     def f_tf(self, t, x, y, z):
+        # should not depend on x
         term1 = tf.reduce_sum(z, 1, keepdims=True)/np.sqrt(self.dim) - y/2
         term2 = tf.sqrt(1 + y**2 + tf.reduce_sum(z**2, 1, keepdims=True)) - np.sqrt(2)
         return  - term1 - term2
