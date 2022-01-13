@@ -32,7 +32,7 @@ class SineBMSolver():
 
         # begin sgd iteration
         for step in range(self.opt_config.num_iterations+1):
-            if self.eqn_config.type == 3 and step % 50 == 0:
+            if self.eqn_config.type == 3 and step % self.opt_config.freq_update_drift == 0:
                 self.bsde.update_mean_y_estimate(mean_y_train)
                 self.bsde.learn_drift()
             if step % self.opt_config.freq_resample == 0:

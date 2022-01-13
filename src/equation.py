@@ -40,18 +40,18 @@ class SineBM(Equation):
             self.learn_drift()
 
     def create_model(self):
-        net_width = [16, 16]
+        num_hiddens = self.eqn_config.num_hiddens
         activation = 'softplus'
         inputs = keras.Input(shape=(self.dim+1,))
-        x = keras.layers.Dense(net_width[0], activation=activation)(inputs)
-        for w in net_width[1:]:
+        x = keras.layers.Dense(num_hiddens[0], activation=activation)(inputs)
+        for w in num_hiddens[1:]:
             x = keras.layers.Dense(w, activation=activation)(x)
         outputs = keras.layers.Dense(1, activation='softplus')(x)
         return keras.Model(inputs, outputs)
 
     def learn_drift(self):
-        N_simu = 500
-        N_learn = 500
+        N_simu = self.eqn_config.N_simu
+        N_learn = self.eqn_config.N_learn
         N_iter = 3
         dim = self.dim
         Nt = self.num_time_interval
@@ -72,7 +72,7 @@ class SineBM(Equation):
                     x_path[:, i+1, :] = x_path[:, i, :] + np.sin(drift_nn - drift_true) * dt + \
                         np.random.normal(scale=np.sqrt(dt), size=(N_simu, dim))
                     if self.eqn_config.type == 3:
-                        x_path[:, i+1, :] += (self.mean_y_estimate[i] - self.mean_y[i]) * dt
+                        x_path[:, i+1, :] += self.eqn_config.couple_coeff * (self.mean_y_estimate[i] - self.mean_y[i]) * dt
 
             term_approx = np.zeros(shape=[N_learn, self.t_grid.shape[0]]) # pylint: disable=unsubscriptable-object
             term_true = np.zeros(shape=[N_learn, self.t_grid.shape[0]]) # pylint: disable=unsubscriptable-object
@@ -121,7 +121,7 @@ class SineBM(Equation):
                 x_sample[:, i+1, :] = x_sample[:, i, :] + np.sin(drift_nn - drift_true) * dt + \
                     dw_sample[:, :, i]
                 if self.eqn_config.type == 3:
-                    x_sample[:, i+1, :] += (self.mean_y_estimate[i] - self.mean_y[i]) * dt
+                    x_sample[:, i+1, :] += self.eqn_config.couple_coeff * (self.mean_y_estimate[i] - self.mean_y[i]) * dt
         if withtime:
             t_data = np.zeros([num_sample, self.num_time_interval + 1, 1])
             for i, t in enumerate(self.t_grid):
