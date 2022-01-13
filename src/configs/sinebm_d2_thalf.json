@@ -18,12 +18,14 @@
     "verbose": true,
     "opt_config1": {
       "_comment": "DeepBSDE",
+      "freq_resample": 20,
       "lr_values": [1e-2, 1e-3],
       "lr_boundaries": [1000],
       "num_iterations": 2000
     },
     "opt_config2": {
       "_comment": "DBDPsingle",
+      "freq_resample": 20,
       "lr_values": [1e-2, 1e-3, 1e-4],
       "lr_boundaries": [1000, 2000],
       "num_iterations": 8000
@@ -32,7 +34,8 @@
       "_comment": "DBDPiter",
       "lr_values": [1e-4, 1e-4],
       "lr_boundaries": [1000],
-      "num_iterations": 8000
+      "num_sweep":20,
+      "num_iterations_perstep": 1000
     }
   }
 }

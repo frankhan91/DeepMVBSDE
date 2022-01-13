@@ -35,7 +35,7 @@ class SineBMSolver():
             if self.eqn_config.type == 3 and step % 50 == 0:
                 self.bsde.update_mean_y_estimate(mean_y_train)
                 self.bsde.learn_drift()
-            if step % 20 == 0:
+            if step % self.opt_config.freq_resample == 0:
                 train_data = self.bsde.sample(self.net_config.batch_size)
                 train_data = (train_data[0], train_data[1], mean_y_train)
             mean_y_train = self.train_step(train_data)
@@ -54,8 +54,11 @@ class SineBMSolver():
         valid_data = self.bsde.sample(self.net_config.valid_size*20)
         _, mean_y_valid = self.loss_fn((valid_data[0], valid_data[1], mean_y_train), training=False)
         mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
+        print("Estimated mean_y:")
         print(self.bsde.mean_y)
+        print("Error of mean_y:")
         print(mean_y_valid - self.bsde.mean_y)
+        print("Average sqaured error of mean_y:")
         print(np.mean((mean_y_valid - self.bsde.mean_y)**2))
         train_result = {
             "history": np.array(training_history),
@@ -215,7 +218,7 @@ class SineBMDBDPSolver():
         valid_data = self.bsde.sample(self.net_config.valid_size, withtime=True)
 
         # begin sgd iteration
-        for step in range(20):
+        for step in range(self.opt_config.num_sweep):
             if self.eqn_config.type == 3 and step % 1 == 0:
                 print("Updating")
                 self.bsde.update_mean_y_estimate(self.mean_y_train)
@@ -238,8 +241,11 @@ class SineBMDBDPSolver():
         valid_data = self.bsde.sample(self.net_config.valid_size*20, withtime=True)
         _, mean_y_valid = self.total_loss_fn((valid_data[0], valid_data[1], self.mean_y_train))
         mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
+        print("Estimated mean_y:")
         print(self.bsde.mean_y)
+        print("Error of mean_y:")
         print(mean_y_valid - self.bsde.mean_y)
+        print("Average sqaured error of mean_y:")
         print(np.mean((mean_y_valid - self.bsde.mean_y)**2))
         train_result = {
             "history": np.array(training_history),
@@ -253,7 +259,7 @@ class SineBMDBDPSolver():
         for t in range(self.bsde.num_time_interval-1, -1, -1):
             for var in self.optimizer.variables():
                 var.assign(tf.zeros_like(var))
-            for _ in range(1000):
+            for _ in range(self.opt_config.num_iterations_perstep):
                 if t > 0:
                     local_mean_y = self.train_step_inter(train_data, t)
                 else:
