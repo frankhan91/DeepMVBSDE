@@ -45,24 +45,27 @@ class SineBMSolver():
                     (valid_data[0], valid_data[1], mean_y_train), training=False)
                 loss = loss.numpy()
                 y_init = self.y_init.numpy()[0]
+                mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
+                err_mean_y = np.mean((mean_y_valid - self.bsde.mean_y)**2)
                 elapsed_time = time.time() - start_time
-                training_history.append([step, loss, y_init, elapsed_time])
+                training_history.append([step, loss, y_init, err_mean_y, elapsed_time])
                 if self.net_config.verbose:
-                    mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
-                    err_mean_y = np.mean((mean_y_valid - self.bsde.mean_y)**2)
                     logging.info("step: %5u,    loss: %.4e, Y0: %.4e,   err_mean_y: %.4e,    elapsed time: %3u" % (
                         step, loss, y_init, err_mean_y, elapsed_time))
         valid_data = self.bsde.sample(self.net_config.valid_size*20)
         _, mean_y_valid = self.loss_fn((valid_data[0], valid_data[1], mean_y_train), training=False)
         mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
         print("Estimated mean_y:")
-        print(self.bsde.mean_y)
+        print(mean_y_valid)
         print("Error of mean_y:")
         print(mean_y_valid - self.bsde.mean_y)
         print("Average sqaured error of mean_y:")
         print(np.mean((mean_y_valid - self.bsde.mean_y)**2))
         train_result = {
             "history": np.array(training_history),
+            "true_mean_y": self.bsde.mean_y,
+            "estimated_mean_y": mean_y_valid,
+            "err_mean_y": np.mean((mean_y_valid - self.bsde.mean_y)**2)
         }
         return train_result
 
@@ -233,24 +236,27 @@ class SineBMDBDPSolver():
                 loss, mean_y_valid = self.total_loss_fn(
                     (valid_data[0], valid_data[1], self.mean_y_train))
                 y_init = self.y_init.numpy()[0]
+                mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
+                err_mean_y = np.mean((mean_y_valid - self.bsde.mean_y)**2)
                 elapsed_time = time.time() - start_time
-                training_history.append([step, loss, y_init, elapsed_time])
+                training_history.append([step, loss, y_init, err_mean_y, elapsed_time])
                 if self.net_config.verbose:
-                    mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
-                    err_mean_y = np.mean((mean_y_valid - self.bsde.mean_y)**2)
                     logging.info("step: %5u,    loss: %.4e, Y0: %.4e,   err_mean_y: %.4e,    elapsed time: %3u" % (
                         step, loss, y_init, err_mean_y, elapsed_time))
         valid_data = self.bsde.sample(self.net_config.valid_size*20, withtime=True)
         _, mean_y_valid = self.total_loss_fn((valid_data[0], valid_data[1], self.mean_y_train))
         mean_y_valid = np.array([y.numpy() for y in mean_y_valid])
         print("Estimated mean_y:")
-        print(self.bsde.mean_y)
+        print(mean_y_valid)
         print("Error of mean_y:")
         print(mean_y_valid - self.bsde.mean_y)
         print("Average sqaured error of mean_y:")
         print(np.mean((mean_y_valid - self.bsde.mean_y)**2))
         train_result = {
             "history": np.array(training_history),
+            "true_mean_y": self.bsde.mean_y,
+            "estimated_mean_y": mean_y_valid,
+            "err_mean_y": np.mean((mean_y_valid - self.bsde.mean_y)**2)
         }
         return train_result
 

@@ -16,7 +16,7 @@
     "y_init_range": [0, 1],
     "num_hiddens": [16, 16],
     "batch_size": 64,
-    "valid_size": 256,
+    "valid_size": 5120,
     "logging_frequency": 100,
     "dtype": "float64",
     "verbose": true,

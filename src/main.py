@@ -57,14 +57,21 @@ def main(argv):
     if config.eqn_config.eqn_name == "Flocking":
         result_str = "R2: {}, y2_err: {}\n".format(result["R2"], result["y2_err"]) + \
             "v_std:\n" + np.array2string(result["v_std"], max_line_width=10000, separator=',', formatter={'float_kind':lambda x: "%.6f" % x}) + "\n"
+        np.savetxt('{}_result.txt'.format(path_prefix),
+            result["history"],
+            fmt=['%d', '%.5e', '%.5e', '%d'],
+            delimiter=",",
+            header=result_str+'step,loss_function,err_Y2_init,elapsed_time',
+            comments='')
     else:
-        result_str = ""
-    np.savetxt('{}_result.txt'.format(path_prefix),
-               result["history"],
-               fmt=['%d', '%.5e', '%.5e', '%d'],
-               delimiter=",",
-               header=result_str+'step,loss_function,target_value,elapsed_time',
-               comments='')
+        result_str = "err_mean_y_final_valid: {}\n".format(result["err_mean_y"])
+        np.savetxt('{}_result.txt'.format(path_prefix),
+            result["history"],
+            fmt=['%d', '%.5e', '%.5e', '%.5e', '%d'],
+            delimiter=",",
+            header=result_str+'step,loss_function,Y0_init,err_mean_y,elapsed_time',
+            comments='')
+
 
 
 if __name__ == '__main__':
