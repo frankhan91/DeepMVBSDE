@@ -35,6 +35,7 @@ class SineBMSolver():
             if self.eqn_config.type == 3 and step % self.opt_config.freq_update_drift == 0:
                 self.bsde.update_mean_y_estimate(mean_y_train)
                 self.bsde.learn_drift()
+                valid_data = self.bsde.sample(self.net_config.valid_size, seed=1)
             if step % self.opt_config.freq_resample == 0:
                 train_data = self.bsde.sample(self.net_config.batch_size)
                 train_data = (train_data[0], train_data[1], mean_y_train)
@@ -223,6 +224,7 @@ class SineBMDBDPSolver():
                 print("Updating")
                 self.bsde.update_mean_y_estimate(self.mean_y_train)
                 self.bsde.learn_drift()
+                valid_data = self.bsde.sample(self.net_config.valid_size, withtime=True, seed=1)
             if step % 1 == 0:
                 train_data = self.bsde.sample(self.net_config.batch_size, withtime=True)
                 train_data = (train_data[0], train_data[1], self.mean_y_train)

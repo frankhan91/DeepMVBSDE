@@ -2,6 +2,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from scipy.integrate import solve_ivp
+import time
+
 
 class Equation():
     """Base class for defining PDE related function."""
@@ -104,9 +106,14 @@ class SineBM(Equation):
             print("R^2: {}".format(r2))
         # assert r2 < 0.01, "Failed learning of the forward model"
 
-    def sample(self, num_sample, withtime=False):
+    def sample(self, num_sample, withtime=False, seed=None):
         # start = timeit.default_timer()
-        dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
+        if seed:
+            np.random.seed(seed)
+            dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
+            np.random.seed(seed=int(time.time()))
+        else:
+            dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
         dim = self.dim
         Nt = self.num_time_interval
         dt = self.delta_t
