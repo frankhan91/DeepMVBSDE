@@ -15,7 +15,7 @@
     "loss_type": "DeepBSDE",
     "y_init_range": [0.1, 0.1],
     "num_hiddens": [24, 24],
-    "batch_size": 128,
+    "batch_size": 256,
     "valid_size": 5120,
     "logging_frequency": 100,
     "dtype": "float64",
@@ -39,9 +39,9 @@
     "opt_config3": {
       "_comment": "DBDPiter",
       "lr_values": [1e-4, 1e-4],
-      "lr_boundaries": [1000],
-      "num_sweep":20,
-      "num_iterations_perstep": 1000
+      "lr_boundaries": [500],
+      "num_sweep":30,
+      "num_iterations_perstep": 500
     }
   }
 }

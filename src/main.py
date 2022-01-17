@@ -46,6 +46,7 @@ def main(argv):
     absl_logging.set_verbosity('info')
 
     logging.info('Begin to solve %s ' % config.eqn_config.eqn_name)
+    logging.info('Experiment name: %s' % FLAGS.exp_name)
     if config.eqn_config.eqn_name == "SineBM":
         if config.net_config.loss_type == "DBDPiter":
             bsde_solver = SineBMDBDPSolver(config, bsde)
