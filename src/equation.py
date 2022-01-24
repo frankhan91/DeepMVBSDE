@@ -44,7 +44,8 @@ class SineBM(Equation):
             self.update_drift = self.update_drift_nn
         elif self.eqn_config.drift_approx == "mc":
             self.saved_xs = np.zeros(shape=[self.eqn_config.N_simu, self.num_time_interval+1, self.dim])
-            raise NotImplementedError("Not developed")
+            self.drift_predict = self.drift_predict_mc
+            self.update_drift = self.update_drift_mc
         else:
             raise NotImplementedError("Not an valid type for drift approxiamtion.")
         if eqn_config.type != 3:
@@ -154,6 +155,43 @@ class SineBM(Equation):
         # for i in range(self.num_time_interval):
         #     x_sample[:, :, i + 1] = x_sample[:, :, i] + self.sigma * dw_sample[:, :, i]
         # return dw_sample, x_sample
+
+    def drift_predict_mc(self, x):
+        # x is B * (d+1)
+        # always assuming the first dimension is t and all the same acorss the batch
+        t_idx = int(x[0, 0] / self.delta_t)
+        diff_x = x[:, None, 1:] - self.saved_xs[None, :, t_idx, :]
+        norm = np.sum(diff_x**2, axis=-1)
+        drift_approx = np.mean(np.exp(-norm / self.dim), axis=1, keepdims=True)
+        return drift_approx
+
+    def update_drift_mc(self):
+        N_simu = self.eqn_config.N_simu
+        N_iter = 3
+        dim = self.dim
+        Nt = self.num_time_interval
+        dt = self.delta_t
+
+        for _ in range(N_iter):
+            x_path = np.zeros(self.saved_xs.shape)
+            ss_res, ss_tot = 0, 0
+
+            for i, t in enumerate(self.t_grid):
+                drift_true = np.exp(-np.sum(x_path[:, i]**2, axis=-1, keepdims=True)/(dim + 2*t))*(dim/(dim+2*t))**(dim/2)
+                t_tmp = np.zeros(shape=[N_simu, 1]) + t
+                x_tmp = np.concatenate([t_tmp, x_path[:, i]], axis=-1)
+                drift_mc = self.drift_predict(x_tmp)
+                ss_tot += np.sum(drift_true**2)
+                ss_res += np.sum((drift_true-drift_mc)**2)
+                if i < Nt:
+                    x_path[:, i+1, :] = x_path[:, i, :] + np.sin(drift_mc - drift_true) * dt + \
+                        np.random.normal(scale=np.sqrt(dt), size=(N_simu, dim))
+                    if self.eqn_config.type == 3:
+                        x_path[:, i+1, :] += self.eqn_config.couple_coeff * (self.mean_y_estimate[i] - self.mean_y[i]) * dt
+
+            r2 = ss_res / ss_tot
+            print("R^2: {}".format(r2))
+            self.saved_xs = x_path
 
     def update_mean_y_estimate(self, mean_y_estimate):
         self.mean_y_estimate = mean_y_estimate.copy()
