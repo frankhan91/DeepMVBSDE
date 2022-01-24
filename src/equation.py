@@ -37,9 +37,18 @@ class SineBM(Equation):
         self.x_init = np.zeros(self.dim)
         self.mean_y = np.sin(self.t_grid)*np.exp(-self.t_grid/2)
         self.mean_y_estimate = self.mean_y * 0
-        self.drift_model = self.create_model()
+        if self.eqn_config.drift_approx == "nn":
+            self.drift_model = None
+            self.drift_predict = None
+            self.create_model()
+            self.update_drift = self.update_drift_nn
+        elif self.eqn_config.drift_approx == "mc":
+            self.saved_xs = np.zeros(shape=[self.eqn_config.N_simu, self.num_time_interval+1, self.dim])
+            raise NotImplementedError("Not developed")
+        else:
+            raise NotImplementedError("Not an valid type for drift approxiamtion.")
         if eqn_config.type != 3:
-            self.learn_drift()
+            self.update_drift()
 
     def create_model(self):
         num_hiddens = self.eqn_config.num_hiddens
@@ -49,9 +58,10 @@ class SineBM(Equation):
         for w in num_hiddens[1:]:
             x = keras.layers.Dense(w, activation=activation)(x)
         outputs = keras.layers.Dense(1, activation='softplus')(x)
-        return keras.Model(inputs, outputs)
+        self.drift_model = keras.Model(inputs, outputs)
+        self.drift_predict = self.drift_model.predict
 
-    def learn_drift(self):
+    def update_drift_nn(self):
         N_simu = self.eqn_config.N_simu
         N_learn = self.eqn_config.N_learn
         N_iter = 3
@@ -85,7 +95,7 @@ class SineBM(Equation):
                 norm = np.sum(diff_x**2, axis=-1)
                 term_approx[:, i] = np.average(np.exp(-norm / dim), axis=1)
             # learn drift model
-            self.drift_model = self.create_model()
+            self.create_model()
             t_tmp = self.t_grid[None, :, None] + np.zeros(shape=[N_learn, Nt+1, 1])
             X = np.concatenate([t_tmp, x_path[path_idx]], axis=-1)
             X = X.reshape([-1, dim+1])
@@ -122,7 +132,7 @@ class SineBM(Equation):
         for i, t in enumerate(self.t_grid):
             drift_true = np.exp(-np.sum(x_sample[:, i]**2, axis=-1, keepdims=True)/(dim + 2*t))*(dim/(dim+2*t))**(dim/2)
             x_tmp = np.concatenate([t_tmp, x_sample[:, i]], axis=-1)
-            drift_nn = self.drift_model.predict(x_tmp)
+            drift_nn = self.drift_predict(x_tmp)
             t_tmp += self.delta_t
             if i < self.num_time_interval:
                 x_sample[:, i+1, :] = x_sample[:, i, :] + np.sin(drift_nn - drift_true) * dt + \
@@ -212,7 +222,7 @@ class Flocking(Equation):
         outputs = keras.layers.Dense(2*self.dim, activation=None, dtype="float64")(x)
         return keras.Model(inputs, outputs)
 
-    def learn_drift(self, path_data):
+    def update_drift(self, path_data):
         batch_size = 128
         epochs = 3
         # learn drift model

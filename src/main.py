@@ -65,7 +65,10 @@ def main(argv):
             header=result_str+'step,loss_function,err_Y2_init,elapsed_time',
             comments='')
     else:
-        result_str = "err_mean_y_final_valid: {}\n".format(result["err_mean_y"])
+        # TODO: add mean_y result
+        result_str = "err_mean_y_final_valid: {}\n".format(result["err_mean_y"]) + \
+            "estimated_mean_y:\n" + np.array2string(result["estimated_mean_y"], max_line_width=10000, separator=',', formatter={'float_kind':lambda x: "%.6f" % x}) + "\n" + \
+            "true_mean_y:\n" + np.array2string(result["true_mean_y"], max_line_width=10000, separator=',', formatter={'float_kind':lambda x: "%.6f" % x}) + "\n"
         np.savetxt('{}_result.txt'.format(path_prefix),
             result["history"],
             fmt=['%d', '%.5e', '%.5e', '%.5e', '%d'],

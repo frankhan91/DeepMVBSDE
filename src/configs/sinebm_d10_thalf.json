@@ -9,7 +9,8 @@
     "num_time_interval": 20,
     "num_hiddens": [24, 24],
     "N_simu": 1500,
-    "N_learn": 1500
+    "N_learn": 1500,
+    "drift_approx": "nn"
   },
   "net_config": {
     "loss_type": "DeepBSDE",

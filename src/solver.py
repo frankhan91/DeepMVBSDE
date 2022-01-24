@@ -34,7 +34,7 @@ class SineBMSolver():
         for step in range(self.opt_config.num_iterations+1):
             if self.eqn_config.type == 3 and step % self.opt_config.freq_update_drift == 0:
                 self.bsde.update_mean_y_estimate(mean_y_train)
-                self.bsde.learn_drift()
+                self.bsde.update_drift()
                 valid_data = self.bsde.sample(self.net_config.valid_size, seed=1)
             if step % self.opt_config.freq_resample == 0:
                 train_data = self.bsde.sample(self.net_config.batch_size)
@@ -226,7 +226,7 @@ class SineBMDBDPSolver():
             if self.eqn_config.type == 3 and step % 1 == 0:
                 print("Updating")
                 self.bsde.update_mean_y_estimate(self.mean_y_train)
-                self.bsde.learn_drift()
+                self.bsde.update_drift()
                 valid_data = self.bsde.sample(self.net_config.valid_size, withtime=True, seed=1)
             if step % 1 == 0:
                 train_data = self.bsde.sample(self.net_config.batch_size, withtime=True)
@@ -370,7 +370,7 @@ class FlockSolver():
             if step % 50 == 0:
                 simul_data = self.bsde.sample(self.net_config.simul_size)
                 _, path_data = self.model.simulate_abstract(simul_data, False, "MC")
-                self.bsde.learn_drift(path_data)
+                self.bsde.update_drift(path_data)
             train_data = self.bsde.sample(self.net_config.batch_size)
             self.train_step(train_data)
             if step % self.net_config.logging_frequency == 0:
