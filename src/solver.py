@@ -347,6 +347,110 @@ class SineBMDBDPSolver():
         return mean_y
 
 
+class SineBMNewSolver():
+    """The fully connected neural network model."""
+    def __init__(self, config, bsde):
+        self.eqn_config = config.eqn_config
+        self.net_config = config.net_config
+        self.bsde = bsde
+
+        if self.net_config.loss_type == "DeepBSDE":
+            self.model = SineBMNewNonsharedModel(config, bsde)
+            self.opt_config = self.net_config.opt_config1
+        self.y_init = self.model.y_init
+        lr_schedule = tf.keras.optimizers.schedules.PiecewiseConstantDecay(
+            self.opt_config.lr_boundaries, self.opt_config.lr_values)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, epsilon=1e-8)
+
+    def train(self):
+        start_time = time.time()
+        training_history = []
+        valid_data = self.bsde.sample(self.net_config.valid_size)
+
+        # begin sgd iteration
+        for step in range(self.opt_config.num_iterations+1):
+            if step % self.opt_config.freq_update_drift == 0:
+                path_data = self.bsde.sample(self.eqn_config.N_simu)
+                y_path = self.model(path_data, training=False, drift_fn=self.bsde.drift_predict)
+                self.bsde.update_drift(y_path.numpy())
+            train_data = self.bsde.sample(self.net_config.batch_size)
+            self.train_step(train_data)
+            if step % self.net_config.logging_frequency == 0:
+                loss = self.loss_fn(valid_data, training=False)
+                loss = loss.numpy()
+                y_init_err = np.mean(self.y_init.numpy()[0]**2)
+                elapsed_time = time.time() - start_time
+                training_history.append([step, loss, y_init_err, elapsed_time])
+                if self.net_config.verbose:
+                    logging.info("step: %5u,    loss: %.4e, Y0_err: %.4e,   elapsed time: %3u" % (
+                        step, loss, y_init_err, elapsed_time))
+        valid_data = self.bsde.sample(self.net_config.valid_size*20)
+        _ = self.loss_fn(valid_data, training=False)
+        train_result = {
+            "history": np.array(training_history),
+        }
+        return train_result
+
+    def loss_fn(self, inputs, training):
+        dw, x = inputs
+        y_path = self.model(inputs, training, self.bsde.drift_predict)
+        y_target = self.bsde.g_tf(self.bsde.total_time, x[:, :, -1])
+        delta = y_path[..., -1] - y_target
+        # use linear approximation outside the clipped range
+        loss = tf.reduce_mean(
+            tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
+            2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2)
+        )
+        return loss
+
+    def grad(self, inputs, training):
+        with tf.GradientTape(persistent=True) as tape:
+            loss = self.loss_fn(inputs, training)
+        grad = tape.gradient(loss, self.model.trainable_variables)
+        del tape
+        return grad
+
+    @tf.function
+    def train_step(self, train_data):
+        grad = self.grad(train_data, training=True)
+        self.optimizer.apply_gradients(zip(grad, self.model.trainable_variables))
+
+
+class SineBMNewNonsharedModel(tf.keras.Model):
+    def __init__(self, config, bsde):
+        super().__init__()
+        self.eqn_config = config.eqn_config
+        self.net_config = config.net_config
+        self.bsde = bsde
+        self.y_init = tf.Variable(np.random.uniform(low=self.net_config.y_init_range[0],
+                                                    high=self.net_config.y_init_range[1],
+                                                    size=[1, self.eqn_config.dim]), name="yinit"
+                                  )
+        self.z_init = tf.Variable(np.random.uniform(low=-.1, high=.1,
+                                                    size=[1, self.eqn_config.dim**2]), name="zinit"
+                                  )
+        self.subnet = [FeedForwardSubNet(config, self.eqn_config.dim**2) for _ in range(self.bsde.num_time_interval-1)]
+
+    def call(self, inputs, training, drift_fn):
+        y_path = []
+        dim = self.bsde.dim
+        dw, x = inputs
+        time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
+        all_one_vec = tf.ones(shape=tf.stack([tf.shape(dw)[0], 1]), dtype=self.net_config.dtype)
+        y = all_one_vec * self.y_init
+        z = tf.reshape(all_one_vec * self.z_init, (-1, dim, dim))
+        y_path.append(y)
+        for t in range(0, self.bsde.num_time_interval):
+            drift_predict = drift_fn(tf.concat([time_stamp[t]*all_one_vec, y], axis=-1))
+            drift_true = tf.exp(-tf.reduce_sum(y**2, axis=-1, keepdims=True)/(dim + 2*time_stamp[t]))*(dim/(dim+2*time_stamp[t]))**(dim/2)
+            y = y + self.bsde.delta_t * tf.sin(drift_predict - drift_true) + tf.matmul(z, dw[:, :, t:t+1])[:, :, 0]
+            y_path.append(y)
+            if t < self.bsde.num_time_interval-1:
+                z = tf.reshape(self.subnet[t](x[:, :, t + 1], training) / dim, (-1, dim, dim))
+        y_path = tf.stack(y_path, axis=-1)
+        return y_path
+
+
 class FlockSolver():
     """The fully connected neural network model."""
     def __init__(self, config, bsde):

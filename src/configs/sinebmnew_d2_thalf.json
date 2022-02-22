@@ -1,0 +1,32 @@
+{
+  "eqn_config": {
+    "_comment": "",
+    "eqn_name": "SineBMNew",
+    "type": 3,
+    "couple_coeff": 1,
+    "total_time": 0.5,
+    "dim": 2,
+    "num_time_interval": 20,
+    "num_hiddens": [16, 16],
+    "N_simu": 500,
+    "N_learn": 500,
+    "drift_approx": "nn"
+  },
+  "net_config": {
+    "loss_type": "DeepBSDE",
+    "y_init_range": [0.5, 0.5],
+    "num_hiddens": [16, 16],
+    "batch_size": 64,
+    "valid_size": 5120,
+    "logging_frequency": 100,
+    "dtype": "float64",
+    "verbose": true,
+    "opt_config1": {
+      "_comment": "DeepBSDE",
+      "freq_update_drift": 100,
+      "lr_values": [1e-2, 1e-3],
+      "lr_boundaries": [1000],
+      "num_iterations": 2000
+    }
+  }
+}

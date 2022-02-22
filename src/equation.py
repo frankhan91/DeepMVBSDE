@@ -209,6 +209,93 @@ class SineBM(Equation):
         return tf.math.cos(t + tf.reduce_sum(x, 1, keepdims=True)/np.sqrt(self.dim)) / np.sqrt(self.dim)
 
 
+class SineBMNew(Equation):
+    """Sine of BM in the note"""
+    def __init__(self, eqn_config):
+        super(SineBMNew, self).__init__(eqn_config)
+        self.x_init = np.zeros(self.dim)
+        if self.eqn_config.drift_approx == "nn":
+            self.drift_model = None
+            self.drift_predict = None
+            self.create_model()
+            self.update_drift = self.update_drift_nn
+        elif self.eqn_config.drift_approx == "mc":
+            self.saved_xs = np.zeros(shape=[self.eqn_config.N_simu, self.num_time_interval+1, self.dim])
+            # self.drift_predict = self.drift_predict_mc
+            # self.update_drift = self.update_drift_mc
+        else:
+            raise NotImplementedError("Not an valid type for drift approxiamtion.")
+
+    def sample(self, num_sample, seed=None):
+        if seed:
+            np.random.seed(seed)
+            dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
+            np.random.seed(seed=int(time.time()))
+        else:
+            dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
+        x_sample = np.zeros([num_sample, self.dim, self.num_time_interval + 1])
+        x_sample[:, :, 1:] = np.cumsum(dw_sample, axis=-1)
+        return dw_sample, x_sample
+
+    def create_model(self):
+        num_hiddens = self.eqn_config.num_hiddens
+        activation = 'softplus'
+        inputs = keras.Input(shape=(self.dim+1,))
+        x = keras.layers.Dense(num_hiddens[0], activation=activation, dtype="float64")(inputs)
+        for w in num_hiddens[1:]:
+            x = keras.layers.Dense(w, activation=activation, dtype="float64")(x)
+        outputs = keras.layers.Dense(1, activation='softplus', dtype="float64")(x)
+        self.drift_model = keras.Model(inputs, outputs)
+        self.drift_predict = self.drift_model.__call__
+
+    def update_drift_nn(self, y_path):
+        # y_path is a numpy array with batch size N_simu
+        N_simu = self.eqn_config.N_simu
+        N_learn = self.eqn_config.N_learn
+        dim = self.dim
+        Nt = self.num_time_interval
+
+        batch_size = 128
+        epochs = 80
+
+        y_path = y_path.transpose((0, 2, 1)) # to facilitate interaction computation
+        term_approx = np.zeros(shape=[N_learn, self.t_grid.shape[0]]) # pylint: disable=unsubscriptable-object
+        term_true = np.zeros(shape=[N_learn, self.t_grid.shape[0]]) # pylint: disable=unsubscriptable-object
+        path_idx = np.random.choice(N_simu, N_learn, replace=False)
+        for i, t in enumerate(self.t_grid):
+            term_true[:, i] = np.exp(-np.sum(y_path[path_idx, i]**2, axis=-1)/(dim + 2*t))*(dim/(dim+2*t))**(dim/2)
+            diff_y = y_path[path_idx, None, i, :] - y_path[None, path_idx, i, :]
+            norm = np.sum(diff_y**2, axis=-1)
+            term_approx[:, i] = np.average(np.exp(-norm / dim), axis=1)
+        # learn drift model
+        # self.create_model()
+        t_tmp = self.t_grid[None, :, None] + np.zeros(shape=[N_learn, Nt+1, 1])
+        X = np.concatenate([t_tmp, y_path[path_idx]], axis=-1)
+        X = X.reshape([-1, dim+1])
+        Y = term_approx.reshape([-1, 1])
+        lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+            0.001, decay_steps=200, decay_rate=0.9
+        )
+        optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+        self.drift_model.compile(loss='mse',optimizer=optimizer)
+        hist = self.drift_model.fit(
+            X, Y, batch_size=batch_size,
+            epochs=epochs, verbose=0,
+            validation_split=0.05
+        )
+        Y_predict = self.drift_model.predict(X)
+        Y_true = term_true.reshape([-1, 1])
+        r2 = np.sum((Y_predict - Y_true)**2)/np.sum((Y_true-np.mean(Y_true))**2)
+        print("R^2: {}".format(r2))
+
+    def g_tf(self, t, x):
+        return x
+
+    def f_tf(self, t, x, y, z):
+        # not used
+        return None
+
+
 class Flocking(Equation):
     """Flocking in the note"""
     def __init__(self, eqn_config):

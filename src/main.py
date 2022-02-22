@@ -15,10 +15,10 @@ import numpy as np
 import tensorflow as tf
 
 import equation as eqn
-from solver import SineBMSolver, SineBMDBDPSolver, FlockSolver
+from solver import SineBMSolver, SineBMDBDPSolver, SineBMNewSolver, FlockSolver
 
 
-flags.DEFINE_string('config_path', 'configs/sinebm_d10_thalf.json',
+flags.DEFINE_string('config_path', 'configs/sinebmnew_d2_thalf.json',
                     """The path to load json file.""")
 flags.DEFINE_string('exp_name', 'test',
                     """The name of numerical experiments, prefix for logging""")
@@ -52,6 +52,8 @@ def main(argv):
             bsde_solver = SineBMDBDPSolver(config, bsde)
         else:
             bsde_solver = SineBMSolver(config, bsde)
+    elif config.eqn_config.eqn_name == "SineBMNew":
+        bsde_solver = SineBMNewSolver(config, bsde)
     elif config.eqn_config.eqn_name == "Flocking":
         bsde_solver = FlockSolver(config, bsde)
     result = bsde_solver.train()
@@ -64,7 +66,7 @@ def main(argv):
             delimiter=",",
             header=result_str+'step,loss_function,err_Y2_init,elapsed_time',
             comments='')
-    else:
+    elif config.eqn_config.eqn_name == "SineBM":
         # TODO: add mean_y result
         result_str = "err_mean_y_final_valid: {}\n".format(result["err_mean_y"]) + \
             "estimated_mean_y:\n" + np.array2string(result["estimated_mean_y"], max_line_width=10000, separator=',', formatter={'float_kind':lambda x: "%.6f" % x}) + "\n" + \
