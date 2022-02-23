@@ -18,7 +18,7 @@ import equation as eqn
 from solver import SineBMSolver, SineBMDBDPSolver, SineBMNewSolver, FlockSolver
 
 
-flags.DEFINE_string('config_path', 'configs/sinebmnew_d2_thalf.json',
+flags.DEFINE_string('config_path', 'configs/sinebmnew_d10_thalf.json',
                     """The path to load json file.""")
 flags.DEFINE_string('exp_name', 'test',
                     """The name of numerical experiments, prefix for logging""")

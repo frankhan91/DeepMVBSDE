@@ -219,10 +219,11 @@ class SineBMNew(Equation):
             self.drift_predict = None
             self.create_model()
             self.update_drift = self.update_drift_nn
+            print(self.drift_model.summary())
         elif self.eqn_config.drift_approx == "mc":
-            self.saved_xs = np.zeros(shape=[self.eqn_config.N_simu, self.num_time_interval+1, self.dim])
-            # self.drift_predict = self.drift_predict_mc
-            # self.update_drift = self.update_drift_mc
+            self.saved_ys = np.zeros(shape=[self.eqn_config.N_simu, self.num_time_interval+1, self.dim])
+            self.drift_predict = self.drift_predict_mc
+            self.update_drift = self.update_drift_mc
         else:
             raise NotImplementedError("Not an valid type for drift approxiamtion.")
 
@@ -246,7 +247,7 @@ class SineBMNew(Equation):
             x = keras.layers.Dense(w, activation=activation, dtype="float64")(x)
         outputs = keras.layers.Dense(1, activation='softplus', dtype="float64")(x)
         self.drift_model = keras.Model(inputs, outputs)
-        self.drift_predict = self.drift_model.__call__
+        self.drift_predict = self.drift_predict_nn
 
     def update_drift_nn(self, y_path):
         # y_path is a numpy array with batch size N_simu
@@ -287,6 +288,24 @@ class SineBMNew(Equation):
         Y_true = term_true.reshape([-1, 1])
         r2 = np.sum((Y_predict - Y_true)**2)/np.sum((Y_true-np.mean(Y_true))**2)
         print("R^2: {}".format(r2))
+        print("y_path mean: {}".format(y_path.mean()))
+
+    def update_drift_mc(self, y_path):
+        self.saved_ys = y_path.transpose((0, 2, 1)).copy()
+        print("y_path mean: {}".format(y_path.mean()))
+
+    def drift_predict_nn(self, t_idx, y, all_one_vec):
+        inputs = tf.concat([self.t_grid[t_idx]*all_one_vec, y], axis=-1)
+        return self.drift_model(inputs)
+
+    def drift_predict_mc(self, t_idx, y, all_one_vec):
+        # y is B * d
+        diff_y = tf.expand_dims(y, 1) - self.saved_ys[None, :, t_idx, :]
+        norm = tf.reduce_sum(diff_y**2, axis=-1)
+        drift_approx = tf.reduce_mean(tf.exp(-norm / self.dim), axis=1, keepdims=True)
+        # dim = self.dim
+        # drift_approx = tf.exp(-tf.reduce_sum(y**2, axis=-1, keepdims=True)/(dim + 2*self.t_grid[t_idx]))*(dim/(dim+2*self.t_grid[t_idx]))**(dim/2)
+        return drift_approx
 
     def g_tf(self, t, x):
         return x

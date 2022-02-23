@@ -441,9 +441,10 @@ class SineBMNewNonsharedModel(tf.keras.Model):
         z = tf.reshape(all_one_vec * self.z_init, (-1, dim, dim))
         y_path.append(y)
         for t in range(0, self.bsde.num_time_interval):
-            drift_predict = drift_fn(tf.concat([time_stamp[t]*all_one_vec, y], axis=-1))
+            drift_predict = drift_fn(t, y, all_one_vec)
             drift_true = tf.exp(-tf.reduce_sum(y**2, axis=-1, keepdims=True)/(dim + 2*time_stamp[t]))*(dim/(dim+2*time_stamp[t]))**(dim/2)
             y = y + self.bsde.delta_t * tf.sin(drift_predict - drift_true) + tf.matmul(z, dw[:, :, t:t+1])[:, :, 0]
+            # y = y + self.bsde.delta_t * tf.sin(drift_predict - drift_true) + dw[:, :, t]
             y_path.append(y)
             if t < self.bsde.num_time_interval-1:
                 z = tf.reshape(self.subnet[t](x[:, :, t + 1], training) / dim, (-1, dim, dim))
