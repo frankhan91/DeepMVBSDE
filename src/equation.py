@@ -288,11 +288,9 @@ class SineBMNew(Equation):
         Y_true = term_true.reshape([-1, 1])
         r2 = np.sum((Y_predict - Y_true)**2)/np.sum((Y_true-np.mean(Y_true))**2)
         print("R^2: {}".format(r2))
-        print("y_path mean: {}".format(y_path.mean()))
 
     def update_drift_mc(self, y_path):
         self.saved_ys = y_path.transpose((0, 2, 1)).copy()
-        print("y_path mean: {}".format(y_path.mean()))
 
     def drift_predict_nn(self, t_idx, y, all_one_vec):
         inputs = tf.concat([self.t_grid[t_idx]*all_one_vec, y], axis=-1)

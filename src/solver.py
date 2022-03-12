@@ -373,19 +373,21 @@ class SineBMNewSolver():
                 path_data = self.bsde.sample(self.eqn_config.N_simu)
                 y_path = self.model(path_data, training=False, drift_fn=self.bsde.drift_predict)
                 self.bsde.update_drift(y_path.numpy())
+                y_path_err = np.mean((y_path.numpy()-path_data[1])**2)
             train_data = self.bsde.sample(self.net_config.batch_size)
             self.train_step(train_data)
             if step % self.net_config.logging_frequency == 0:
                 loss = self.loss_fn(valid_data, training=False)
                 loss = loss.numpy()
-                y_init_err = np.mean(self.y_init.numpy()[0]**2)
+                y_init = np.mean(self.y_init.numpy()[0]**2)
                 elapsed_time = time.time() - start_time
-                training_history.append([step, loss, y_init_err, elapsed_time])
+                training_history.append([step, loss, y_init, y_path_err, elapsed_time])
                 if self.net_config.verbose:
-                    logging.info("step: %5u,    loss: %.4e, Y0_err: %.4e,   elapsed time: %3u" % (
-                        step, loss, y_init_err, elapsed_time))
+                    logging.info("step: %5u,    loss: %.4e, Y0: %.4e,   Y_path_err: %.4e,   elapsed time: %3u" % (
+                        step, loss, y_init, y_path_err, elapsed_time))
+        print("Y_path error in time:")
+        print(np.mean((y_path-path_data[1])**2, axis=(0, 1)))
         valid_data = self.bsde.sample(self.net_config.valid_size*20)
-        _ = self.loss_fn(valid_data, training=False)
         train_result = {
             "history": np.array(training_history),
         }
