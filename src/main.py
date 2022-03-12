@@ -1,5 +1,5 @@
 """
-The main file to run BSDE solver to solve parabolic partial differential equations (PDEs).
+The main file to run BSDE solver to solve McKean-Vlasov Forward-Backward Stochastic Differential Equations.
 
 """
 
@@ -22,8 +22,9 @@ flags.DEFINE_string('config_path', 'configs/sinebmnew_d2_thalf.json',
                     """The path to load json file.""")
 flags.DEFINE_string('exp_name', 'test',
                     """The name of numerical experiments, prefix for logging""")
+flags.DEFINE_string('logging_dir', '../logs',
+                    """Directory where to write event logs and output array""")
 FLAGS = flags.FLAGS
-FLAGS.log_dir = '../logs'  # directory where to write event logs and output array
 
 
 def main(argv):
@@ -34,9 +35,9 @@ def main(argv):
     bsde = getattr(eqn, config.eqn_config.eqn_name)(config.eqn_config)
     tf.keras.backend.set_floatx(config.net_config.dtype)
 
-    if not os.path.exists(FLAGS.log_dir):
-        os.mkdir(FLAGS.log_dir)
-    path_prefix = os.path.join(FLAGS.log_dir, FLAGS.exp_name)
+    if not os.path.exists(FLAGS.logging_dir):
+        os.mkdir(FLAGS.logging_dir)
+    path_prefix = os.path.join(FLAGS.logging_dir, FLAGS.exp_name)
     with open('{}_config.json'.format(path_prefix), 'w') as outfile:
         json.dump(dict((name, getattr(config, name))
                        for name in dir(config) if not name.startswith('__')),
