@@ -144,7 +144,7 @@ class SineBM(Equation):
             t_data = np.zeros([num_sample, self.num_time_interval + 1, 1])
             for i, t in enumerate(self.t_grid):
                 t_data[:, i, :] = t
-            x_sample = np.concatenate([x_sample, t_data], axis=-1)
+            x_sample = np.concatenate([t_data, x_sample], axis=-1)
         x_sample = x_sample.transpose((0, 2, 1))
         # stop = timeit.default_timer()
         # print('Time: ', stop - start)

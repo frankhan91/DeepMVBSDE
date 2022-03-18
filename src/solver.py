@@ -283,7 +283,8 @@ class SineBMDBDPSolver():
     def local_loss_fn(self, inputs, t):
         dw, x, mean_y_input = inputs
         if t == self.bsde.num_time_interval-1:
-            y_target = self.bsde.g_tf(self.bsde.total_time, x[:, :self.bsde.dim, -1])
+            # always assuming the first dimension is t
+            y_target = self.bsde.g_tf(self.bsde.total_time, x[:, 1:, -1])
             self.nety_target(x[:, :, t]) # to initialize variables
         else:
             y_target = self.nety_target(x[:, :, t+1])
