@@ -227,7 +227,7 @@ class SineBMNew(Equation):
         else:
             raise NotImplementedError("Not an valid type for drift approxiamtion.")
 
-    def sample(self, num_sample, seed=None):
+    def sample(self, num_sample, withtime=False, seed=None):
         if seed:
             np.random.seed(seed)
             dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
@@ -236,6 +236,11 @@ class SineBMNew(Equation):
             dw_sample = np.random.normal(size=[num_sample, self.dim, self.num_time_interval]) * self.sqrt_delta_t
         x_sample = np.zeros([num_sample, self.dim, self.num_time_interval + 1])
         x_sample[:, :, 1:] = np.cumsum(dw_sample, axis=-1)
+        if withtime:
+            t_data = np.zeros([num_sample, 1, self.num_time_interval + 1])
+            for i, t in enumerate(self.t_grid):
+                t_data[:, :, i] = t
+            x_sample = np.concatenate([t_data, x_sample], axis=1)
         return dw_sample, x_sample
 
     def create_model(self):

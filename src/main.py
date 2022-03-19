@@ -15,10 +15,10 @@ import numpy as np
 import tensorflow as tf
 
 import equation as eqn
-from solver import SineBMSolver, SineBMDBDPSolver, SineBMNewSolver, FlockSolver
+from solver import SineBMSolver, SineBMDBDPSolver, SineBMNewSolver, SineBMNewDBDPSolver, FlockSolver
 
 
-flags.DEFINE_string('config_path', 'configs/sinebm_d2_thalf.json',
+flags.DEFINE_string('config_path', 'configs/sinebmnew_d2_thalf.json',
                     """The path to load json file.""")
 flags.DEFINE_string('exp_name', 'test',
                     """The name of numerical experiments, prefix for logging""")
@@ -54,7 +54,10 @@ def main(argv):
         else:
             bsde_solver = SineBMSolver(config, bsde)
     elif config.eqn_config.eqn_name == "SineBMNew":
-        bsde_solver = SineBMNewSolver(config, bsde)
+        if config.net_config.loss_type == "DBDPiter":
+            bsde_solver = SineBMNewDBDPSolver(config, bsde)
+        else:
+            bsde_solver = SineBMNewSolver(config, bsde)
     elif config.eqn_config.eqn_name == "Flocking":
         bsde_solver = FlockSolver(config, bsde)
     result = bsde_solver.train()
