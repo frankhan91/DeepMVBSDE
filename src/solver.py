@@ -635,7 +635,7 @@ class FlockSolver():
                     step, loss, err_y2_init, elapsed_time))
                 training_history.append([step, loss, err_y2_init, elapsed_time])
         np.random.seed(self.eqn_config.simul_seed)
-        valid_data = self.bsde.sample(self.net_config.simul_size)
+        valid_data = self.bsde.sample(self.net_config.simul_size*10)
         valid_y2_init_true = self.bsde.y2_init_true_fn(valid_data["v_init"])
         y2_init = self.model.y2_init_predict(valid_data).numpy()
         print("Y2_true", valid_y2_init_true[:3])
@@ -644,11 +644,16 @@ class FlockSolver():
         print("Std of v_terminal", path_data["v_std"].numpy()[-1])
         y2_err = np.mean((y2_init - valid_y2_init_true)**2)
         y2_square = np.mean(y2_init**2)
+        state_path = path_data["input"].numpy()[:, 1:].reshape(
+                [self.eqn_config.num_time_interval, -1, self.eqn_config.dim*2]
+            ).transpose((1, 0, 2))
+        state_path = np.concatenate([state_path, path_data["final_state"].numpy()[:, None, :]], axis=1)
         train_result = {
             "history": np.array(training_history),
             "y2_err": y2_err,
             "R2": 1 - y2_err / y2_square,
-            "v_std": path_data["v_std"].numpy()
+            "v_std": path_data["v_std"].numpy(),
+            "state_path": state_path
         }
         return train_result
 
@@ -690,7 +695,7 @@ class FlockNonsharedModel(tf.keras.Model):
         all_one_vec = tf.ones(shape=tf.stack([tf.shape(inputs["dw"])[0], 1]), dtype=self.net_config.dtype)
         x, v = inputs["x_init"], inputs["v_init"]
         v_std = [tf.math.reduce_std(v[:, 0])]
-        y = self.y_init_net(tf.concat([x, v], axis=1))
+        y = self.y_init_net(tf.concat([x, v], axis=1), training,)
         y1, y2 = y[:, :self.eqn_config.dim], y[:, self.eqn_config.dim:]
         z = self.z_subnet[0](v, training) / self.bsde.dim
         z = tf.reshape(z, [-1, 2*self.eqn_config.dim, self.eqn_config.dim])
@@ -701,10 +706,12 @@ class FlockNonsharedModel(tf.keras.Model):
             if drift_type == "NN":
                 y1_drift_term, y2_drift_term = self.bsde.y_drift_nn(t_input, x, v)
             elif drift_type == "MC":
-                y1_drift_term, y2_drift_term = self.bsde.y_drift_mc(t_input, x, v)
-                y_drift_term = tf.concat([y1_drift_term, y2_drift_term], axis=1)
-                y_drift_label = tf.concat([y_drift_label, y_drift_term], axis=0)
+                y1_drift_term_mc, y2_drift_term_mc = self.bsde.y_drift_mc(t_input, x, v)
+                y_drift_term_mc = tf.concat([y1_drift_term_mc, y2_drift_term_mc], axis=1)
+                y_drift_label = tf.concat([y_drift_label, y_drift_term_mc], axis=0)
                 drift_input = tf.concat([drift_input, tf.concat([t_input, x, v], axis=1)], axis=0)
+                # use NN predictions to simulate empirical distribution
+                y1_drift_term, y2_drift_term = self.bsde.y_drift_nn(t_input, x, v)
             x = x + v * self.bsde.delta_t
             v = v - y2 / self.bsde.R / 2 * self.bsde.delta_t + self.bsde.C * inputs["dw"][:, :, t]
             diffusion_term = (z @ inputs["dw"][:, :, t:t+1])[..., 0]
@@ -715,7 +722,8 @@ class FlockNonsharedModel(tf.keras.Model):
                 z = self.z_subnet[t+1](v, training) / self.bsde.dim
                 z = tf.reshape(z, [-1, 2*self.eqn_config.dim, self.eqn_config.dim])
         v_std = tf.stack(v_std, axis=0)
-        path_data = {"input": drift_input, "y_drift": y_drift_label, "v_std": v_std}
+        final_state = tf.concat([x, v], axis=1)
+        path_data = {"input": drift_input, "y_drift": y_drift_label, "v_std": v_std, "final_state": final_state}
         y = tf.concat([y1, y2], axis=1)
         return y, path_data
 
