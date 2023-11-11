@@ -15,7 +15,7 @@ import numpy as np
 import tensorflow as tf
 
 import equation as eqn
-from solver import SineBMSolver, SineBMDBDPSolver, SineBMNewSolver, SineBMNewDBDPSolver, FlockSolver
+from solver import SineBMSolver, SineBMDBDPSolver, FlockSolver
 
 
 flags.DEFINE_string('config_path', 'configs/flock_d3.json',
@@ -53,11 +53,6 @@ def main(argv):
             bsde_solver = SineBMDBDPSolver(config, bsde)
         else:
             bsde_solver = SineBMSolver(config, bsde)
-    elif config.eqn_config.eqn_name == "SineBMNew":
-        if config.net_config.loss_type == "DBDPiter":
-            bsde_solver = SineBMNewDBDPSolver(config, bsde)
-        else:
-            bsde_solver = SineBMNewSolver(config, bsde)
     elif config.eqn_config.eqn_name == "Flocking":
         bsde_solver = FlockSolver(config, bsde)
     result = bsde_solver.train()
@@ -81,14 +76,6 @@ def main(argv):
             delimiter=",",
             header=result_str+'step,loss_function,Y0_init,err_mean_y,elapsed_time',
             comments='')
-    elif config.eqn_config.eqn_name == "SineBMNew":
-        np.savetxt('{}_result.txt'.format(path_prefix),
-            result["history"],
-            fmt=['%d', '%.5e', '%.5e', '%.5e', '%d'],
-            delimiter=",",
-            header='step,loss_function,Y0_init,err_Y_path,elapsed_time',
-            comments='')
-
 
 
 if __name__ == '__main__':
