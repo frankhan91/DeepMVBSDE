@@ -26,8 +26,8 @@
       "freq_resample": 20,
       "freq_update_drift": 50,
       "lr_values": [1e-2, 1e-3],
-      "lr_boundaries": [1000],
-      "num_iterations": 2000
+      "lr_boundaries": [600],
+      "num_iterations": 1200
     },
     "opt_config2": {
       "_loss_type": "DBDPsingle",
