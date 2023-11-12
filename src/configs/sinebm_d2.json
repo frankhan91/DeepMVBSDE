@@ -14,7 +14,7 @@
   },
   "net_config": {
     "loss_type": "DeepBSDE",
-    "y_init_range": [0, 1],
+    "y_init_range": [0.4, 0.4],
     "num_hiddens": [16, 16],
     "batch_size": 64,
     "valid_size": 5120,
@@ -22,7 +22,7 @@
     "dtype": "float64",
     "verbose": true,
     "opt_config1": {
-      "_comment": "DeepBSDE",
+      "_loss_type": "DeepBSDE",
       "freq_resample": 20,
       "freq_update_drift": 50,
       "lr_values": [1e-2, 1e-3],
@@ -30,7 +30,8 @@
       "num_iterations": 2000
     },
     "opt_config2": {
-      "_comment": "DBDPsingle",
+      "_loss_type": "DBDPsingle",
+      "_comment": "use a single loss function to approximate the training of DBDP",
       "freq_resample": 20,
       "freq_update_drift": 50,
       "lr_values": [1e-2, 1e-3, 1e-4],
@@ -38,7 +39,7 @@
       "num_iterations": 8000
     },
     "opt_config3": {
-      "_comment": "DBDPiter",
+      "_loss_type": "DBDPiter",
       "lr_values": [1e-4, 1e-4],
       "lr_boundaries": [1000],
       "num_sweep":20,

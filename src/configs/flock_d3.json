@@ -9,6 +9,7 @@
     "simul_seed": 123
   },
   "net_config": {
+    "_comment": "the config is for DeepBSDE loss only",
     "y_init_range": [0, 1],
     "num_hiddens": [48, 48],
     "lr_values": [1e-2, 1e-3],

@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow import keras
 from scipy.integrate import solve_ivp
 import time
+import logging
 
 
 class Equation():
@@ -80,7 +81,7 @@ class SineBM(Equation):
                 drift_true = np.exp(-np.sum(x_path[:, i]**2, axis=-1, keepdims=True)/(dim + 2*t))*(dim/(dim+2*t))**(dim/2)
                 t_tmp = np.zeros(shape=[N_simu, 1]) + t
                 x_tmp = np.concatenate([t_tmp, x_path[:, i]], axis=-1)
-                drift_nn = self.drift_model.predict(x_tmp)
+                drift_nn = self.drift_model.predict(x_tmp, verbose=0)
                 if i < Nt:
                     x_path[:, i+1, :] = x_path[:, i, :] + np.sin(drift_nn - drift_true) * dt + \
                         np.random.normal(scale=np.sqrt(dt), size=(N_simu, dim))
@@ -111,10 +112,10 @@ class SineBM(Equation):
                 epochs=epochs, verbose=0,
                 validation_split=0.05
             )
-            Y_predict = self.drift_model.predict(X)
+            Y_predict = self.drift_model.predict(X, verbose=0)
             Y_true = term_true.reshape([-1, 1])
             r2 = np.sum((Y_predict - Y_true)**2)/np.sum((Y_true-np.mean(Y_true))**2)
-            print("R^2: {}".format(r2))
+            logging.debug("Relative err for learning drift: {}".format(r2))
         # assert r2 < 0.01, "Failed learning of the forward model"
 
     def sample(self, num_sample, withtime=False, seed=None):
@@ -133,7 +134,7 @@ class SineBM(Equation):
         for i, t in enumerate(self.t_grid):
             drift_true = np.exp(-np.sum(x_sample[:, i]**2, axis=-1, keepdims=True)/(dim + 2*t))*(dim/(dim+2*t))**(dim/2)
             x_tmp = np.concatenate([t_tmp, x_sample[:, i]], axis=-1)
-            drift_nn = self.drift_predict(x_tmp)
+            drift_nn = self.drift_predict(x_tmp, verbose=0)
             t_tmp += self.delta_t
             if i < self.num_time_interval:
                 x_sample[:, i+1, :] = x_sample[:, i, :] + np.sin(drift_nn - drift_true) * dt + \
@@ -180,7 +181,7 @@ class SineBM(Equation):
                 drift_true = np.exp(-np.sum(x_path[:, i]**2, axis=-1, keepdims=True)/(dim + 2*t))*(dim/(dim+2*t))**(dim/2)
                 t_tmp = np.zeros(shape=[N_simu, 1]) + t
                 x_tmp = np.concatenate([t_tmp, x_path[:, i]], axis=-1)
-                drift_mc = self.drift_predict(x_tmp)
+                drift_mc = self.drift_predict(x_tmp, verbose=0)
                 ss_tot += np.sum(drift_true**2)
                 ss_res += np.sum((drift_true-drift_mc)**2)
                 if i < Nt:
@@ -190,7 +191,7 @@ class SineBM(Equation):
                         x_path[:, i+1, :] += self.eqn_config.couple_coeff * (self.mean_y_estimate[i] - self.mean_y[i]) * dt
 
             r2 = ss_res / ss_tot
-            print("R^2: {}".format(r2))
+            logging.debug("Relative err for learning drift: {}".format(r2))
             self.saved_xs = x_path
 
     def update_mean_y_estimate(self, mean_y_estimate):

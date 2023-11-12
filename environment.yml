@@ -1,0 +1,13 @@
+name: deepmvbsde
+dependencies:
+  - python=3.8
+  - numpy
+  - scipy
+  - matplotlib
+  - jupyterlab
+  - tqdm
+  - pip
+  - pip:
+    - tensorflow>=2.5
+    - munch
+    

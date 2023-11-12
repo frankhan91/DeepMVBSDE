@@ -476,33 +476,6 @@ class FlockNonsharedModel(tf.keras.Model):
         y = tf.concat([y1, y2], axis=1)
         return y, path_data
 
-    # def simulate_y2_abstract(self, inputs, training, drift_type):
-    #     all_one_vec = tf.ones(shape=tf.stack([tf.shape(inputs["dw"])[0], 1]), dtype=self.net_config.dtype)
-    #     v = inputs["v_init"]
-    #     y2 = self.y2_init_net(v)
-    #     # y2 = self.y2_init_net(v) * 0 + self.bsde.y2_init_true_fn(v)
-    #     z = self.z_subnet[0](v, training) / self.bsde.dim
-    #     z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim])
-    #     # z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim]) * 0 + self.bsde.eta[0] * self.bsde.C
-    #     drift_input = tf.zeros(shape=[0, self.eqn_config.dim+1], dtype="float64")
-    #     y2_drift_label = tf.zeros(shape=[0, self.eqn_config.dim], dtype="float64")
-    #     for t in range(0, self.bsde.num_time_interval):
-    #         t_input = t*self.bsde.delta_t*all_one_vec
-    #         if drift_type == "NN":
-    #             y2_drift_term = self.bsde.y2_drift_nn(v, t_input)
-    #         elif drift_type == "MC":
-    #             y2_drift_term = self.bsde.y2_drift_mc(v, t_input)
-    #             y2_drift_label = tf.concat([y2_drift_label, y2_drift_term], axis=0)
-    #             drift_input = tf.concat([drift_input, tf.concat([v, t_input], axis=-1)], axis=0)
-    #         v =  v - y2 / self.bsde.R / 2 * self.bsde.delta_t + self.bsde.C * inputs["dw"][:, :, t]
-    #         y2 = y2 - 2 * (y2_drift_term) * self.bsde.Q * self.bsde.delta_t + (z @ inputs["dw"][:, :, t:t+1])[..., 0]
-    #         if t < self.bsde.num_time_interval-1:
-    #             z = self.z_subnet[t+1](v, training) / self.bsde.dim
-    #             z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim])
-    #             # z = tf.reshape(z, [-1, self.eqn_config.dim, self.eqn_config.dim]) * 0 + self.bsde.eta[t+1] * self.bsde.C
-    #     path_data = {"input": drift_input, "y_drift": y2_drift_label, "v_terminal": v}
-    #     return y2, path_data
-
     def y2_init_predict(self, inputs, training=False):
         return self.y_init_net(tf.concat([inputs["x_init"], inputs["v_init"]], axis=1), training)[:, self.eqn_config.dim:]
         # return self.y2_init_net(inputs["v_init"], training)
